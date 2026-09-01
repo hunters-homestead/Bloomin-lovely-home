@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#74836a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Bloomin Lovely">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<title>Bloomin Lovely Home</title>
+<style>
+:root{
+ --cream:#f7f1e7; --paper:#fffaf2; --ink:#493f35; --muted:#81766b;
+ --sage:#74836a; --sage2:#dfe6d6; --lav:#e5dce9; --rose:#efd8d5;
+ --blue:#dce6e9; --honey:#eee0bb; --line:#e7ddd0; --white:#fffdf8;
+ --shadow:0 10px 28px rgba(79,65,51,.09); --radius:22px;
+}
+*{box-sizing:border-box} body{margin:0;background:var(--cream);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+button,input,select{font:inherit} button{border:0;cursor:pointer;color:inherit}
+.app{max-width:900px;margin:auto;min-height:100vh;padding-bottom:95px}
+header{padding:26px 20px 12px;display:flex;align-items:center;justify-content:space-between}
+.brand{font-family:Georgia,serif;font-size:27px;font-weight:700;color:#596b50}
+.brand small{display:block;font-family:inherit;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#8b715b;margin-top:1px}
+.iconbtn{width:42px;height:42px;border-radius:50%;background:var(--paper);box-shadow:var(--shadow);font-size:19px}
+.screen{padding:8px 18px}
+h1{font:700 30px Georgia,serif;margin:8px 0 5px}.sub{color:var(--muted);margin-bottom:18px}
+.points-card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow);display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.points-card b{font-size:30px}.pill{background:var(--honey);padding:7px 11px;border-radius:99px;font-size:12px}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.card{padding:16px;border-radius:20px;box-shadow:var(--shadow);min-height:105px;border:1px solid rgba(120,100,80,.08)}
+.card h3{margin:0 0 8px;font-size:15px}.card p{margin:0;color:#6d635a;font-size:13px}
+.work{background:var(--lav)}.home{background:var(--sage2)}.kids{background:var(--rose)}.activities{background:var(--blue)}.shopping{background:var(--honey)}
+.section{margin-top:23px}.section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.section-head h2{font:700 19px Georgia,serif;margin:0}
+.list{background:var(--paper);border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:var(--shadow)}
+.task{display:flex;align-items:center;gap:11px;padding:13px 15px;border-bottom:1px solid var(--line)}.task:last-child{border-bottom:0}
+.check{width:22px;height:22px;border:1.5px solid #a99b8d;border-radius:50%;background:transparent;flex:none}.check.done{background:var(--sage);border-color:var(--sage);color:white}.check.done:after{content:"✓";font-size:14px;display:block;line-height:20px;text-align:center}
+.tasktext{flex:1}.tasktext.done{text-decoration:line-through;color:#9b9085}.taskmeta{font-size:11px;color:var(--muted);margin-top:3px}.pts{font-size:11px;background:#f0e9de;padding:5px 7px;border-radius:10px;white-space:nowrap}
+.addrow{padding:13px 15px;color:var(--sage);font-weight:600;border-top:1px dashed var(--line);background:transparent;width:100%;text-align:left}
+.bottom{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(900px,100%);background:rgba(255,250,242,.96);backdrop-filter:blur(12px);border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:9px 6px calc(9px + env(safe-area-inset-bottom));z-index:5}
+.nav{background:none;padding:5px 9px;font-size:11px;color:#8a7e72}.nav span{display:block;font-size:20px;margin-bottom:2px}.nav.active{color:var(--sage);font-weight:700}
+.fab{position:fixed;right:22px;bottom:82px;width:58px;height:58px;border-radius:50%;background:var(--sage);color:white;font-size:30px;box-shadow:0 12px 28px rgba(67,78,60,.28);z-index:6}
+.modal{position:fixed;inset:0;background:rgba(52,44,37,.28);display:none;align-items:flex-end;z-index:20}.modal.show{display:flex}
+.sheet{background:var(--paper);width:100%;max-width:900px;margin:auto;border-radius:28px 28px 0 0;padding:20px;max-height:88vh;overflow:auto}
+.sheet h2{font:700 24px Georgia,serif;margin:0 0 15px}.field{margin:11px 0}.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}.field input,.field select{width:100%;padding:12px;border:1px solid var(--line);border-radius:13px;background:#fffdf9;outline:none}
+.actions{display:flex;gap:10px;margin-top:17px}.primary,.secondary{flex:1;padding:13px;border-radius:14px;font-weight:700}.primary{background:var(--sage);color:white}.secondary{background:#eee6db}
+.reward{display:flex;align-items:center;justify-content:space-between;padding:14px 15px;border-bottom:1px solid var(--line)}.reward:last-child{border:0}.reward small{color:var(--muted)}
+.tabs{display:flex;gap:7px;overflow:auto;margin:8px 0 14px}.tab{background:#eee6db;padding:8px 12px;border-radius:99px;white-space:nowrap;font-size:12px}.tab.active{background:var(--sage);color:white}
+.empty{padding:25px;text-align:center;color:var(--muted)}
+@media(min-width:700px){.screen{padding:15px 30px}.grid{grid-template-columns:repeat(5,1fr)}}
+
+.calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:12px}
+.day{background:var(--paper);border:1px solid var(--line);border-radius:15px;padding:8px 4px;text-align:center;font-size:11px}
+.day strong{display:block;font-size:15px;margin-top:4px}.day.today{background:var(--sage);color:#fff}.day .dot{width:6px;height:6px;border-radius:50%;background:var(--honey);display:inline-block;margin-top:5px}
+.progress{height:9px;background:#e8dfd3;border-radius:99px;overflow:hidden}.progress i{display:block;height:100%;background:var(--sage);border-radius:99px}
+.mini{font-size:11px;color:var(--muted)}.danger{background:#ead8d3;color:#80544b}
+@media(max-width:520px){.calendar{gap:4px}.day{padding:7px 2px}}
+</style>
+</head>
+<body>
+<div class="app">
+<header><div class="brand">Bloomin<small>Lovely Home</small></div><button class="iconbtn" onclick="openSettings()">⚙️</button></header>
+<main id="app"></main>
+<button class="fab" onclick="openAdd()">+</button>
+<nav class="bottom">
+<button class="nav active" data-page="home" onclick="showPage('home')"><span>⌂</span>Home</button>
+<button class="nav" data-page="tasks" onclick="showPage('tasks')"><span>✓</span>Tasks</button>
+<button class="nav" data-page="kids" onclick="showPage('kids')"><span>♡</span>Kids</button>
+<button class="nav" data-page="calendar" onclick="showPage('calendar')"><span>◷</span>Activities</button>
+<button class="nav" data-page="more" onclick="showPage('more')"><span>•••</span>More</button>
+</nav>
+</div>
+
+<div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
+
+<script>
+const key='blh-v1';
+let state=JSON.parse(localStorage.getItem(key)||'null')||{
+ name:'My', points:245,
+ tasks:[
+  {id:1,title:'Reply to emails',cat:'Work',pts:5,done:false,repeat:'Once',due:''},
+  {id:2,title:'Finish project report',cat:'Work',pts:25,done:false,repeat:'Once',due:''},
+  {id:3,title:'Make beds',cat:'Home',pts:5,done:true,repeat:'Daily',due:''},
+  {id:4,title:'Laundry',cat:'Home',pts:5,done:false,repeat:'Weekly',due:''},
+  {id:5,title:'Vacuum',cat:'Home',pts:10,done:false,repeat:'Weekly',due:''},
+  {id:6,title:'Pack sports bag',cat:'Kids',pts:5,done:false,repeat:'Once',due:''},
+  {id:7,title:'Tidy bedroom',cat:'Kids',pts:10,done:false,repeat:'Weekly',due:''}
+ ],
+ kids:[
+  {name:'Eadie',points:180,tasks:['Make bed','Put clothes away','Pack school bag','Tidy bedroom','Feed the pet']},
+  {name:'Child 2',points:240,tasks:['Make bed','Homework','Put dishes away']}
+ ],
+ shopping:['Milk','Bread','Eggs','Chicken','Bananas','School snacks'],
+ activities:[
+  {title:'Soccer practice',time:'4:30pm',day:'Today'},
+  {title:'Piano lesson',time:'5:30pm',day:'Today'}
+ ],
+ rewardHistory:[],
+ rewards:[
+  {title:'Coffee & quiet time',pts:50,icon:'☕'},
+  {title:'Movie night',pts:100,icon:'🍿'},
+  {title:'Treat yourself',pts:75,icon:'🍰'},
+  {title:'New book',pts:150,icon:'📖'},
+  {title:'Day off',pts:500,icon:'🌿'}
+ ],
+ routines:['Make beds','Dishes','Laundry','Vacuum','Clean bathrooms','Mop floors']
+};
+let page='home';
+function save(){localStorage.setItem(key,JSON.stringify(state));render()}
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+function render(){
+ document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
+ const el=document.getElementById('app');
+ if(page==='home') el.innerHTML=home();
+ if(page==='tasks') el.innerHTML=tasksPage();
+ if(page==='kids') el.innerHTML=kidsPage();
+ if(page==='calendar') el.innerHTML=calendarPage();
+ if(page==='more') el.innerHTML=morePage();
+}
+function home(){
+ const todo=state.tasks.filter(t=>!t.done).length;
+ return `<section class="screen"><h1>Good morning, ${esc(state.name)} ☀️</h1><div class="sub">Let's make today feel a little easier.</div>
+ <div class="points-card"><div><div class="sub" style="margin:0">⭐ Your points</div><b>${state.points}</b> <span class="sub">points</span></div><span class="pill">${nextReward()} pts to next reward</span></div>
+ <div class="grid">
+  ${tile('💻','WORK','work',count('Work'),'tasks')}
+  ${tile('🌿','HOME','home',count('Home'),'tasks')}
+  ${tile('🌸','KIDS','kids',state.kids.length+' kids','kids')}
+  ${tile('⚽','ACTIVITIES','activities',state.activities.length+' upcoming','calendar')}
+  ${tile('🛒','SHOPPING','shopping',state.shopping.length+' items','more')}
+ </div>
+ <div class="section"><div class="section-head"><h2>Today</h2><button class="pill" onclick="showPage('tasks')">View all</button></div><div class="list">${state.tasks.filter(t=>!t.done).slice(0,5).map(taskHTML).join('')||'<div class="empty">Nothing urgent. Enjoy the calm 🌿</div>'}</div></div>
+ <div class="section"><div class="section-head"><h2>Coming up</h2><button class="pill" onclick="showPage('calendar')">See calendar</button></div><div class="list">${state.activities.slice(0,3).map(a=>`<div class="task"><span>⚽</span><div class="tasktext"><b>${esc(a.title)}</b><div class="taskmeta">${esc(a.day)} · ${esc(a.time)}</div></div></div>`).join('')}</div></div>
+ </section>`;
+}
+function tile(icon,title,cls,detail,p){return `<button class="card ${cls}" onclick="showPage('${p}')"><div style="font-size:23px">${icon}</div><h3>${title}</h3><p>${detail}</p></button>`}
+function count(c){return state.tasks.filter(t=>t.cat===c&&!t.done).length+' tasks'}
+function taskHTML(t){
+ let meta=[t.cat,t.repeat&&t.repeat!=='Once'?t.repeat:'',t.due?('Due '+t.due):''].filter(Boolean).join(' · ');
+ return `<div class="task"><button class="check ${t.done?'done':''}" onclick="toggleTask(${t.id})"></button><div class="tasktext ${t.done?'done':''}" onclick="editTask(${t.id})"><b>${esc(t.title)}</b><div class="taskmeta">${esc(meta)}</div></div><span class="pts">${t.pts} pts</span></div>`
+}
+function tasksPage(){
+ return `<section class="screen"><h1>Tasks</h1><div class="sub">Everything you need to get done, in one place.</div>
+ <div class="tabs"><button class="tab active">All</button><button class="tab" onclick="filterTasks('Work')">Work</button><button class="tab" onclick="filterTasks('Home')">Home</button><button class="tab" onclick="filterTasks('Kids')">Kids</button></div>
+ <div class="list">${state.tasks.map(taskHTML).join('')}<button class="addrow" onclick="openAdd()">＋ Add task</button></div>
+ <div class="section"><div class="section-head"><h2>Cleaning routines</h2><button class="pill" onclick="openRoutine()">Edit</button></div><div class="list">${state.routines.map((r,i)=>`<div class="task"><button class="check"></button><div class="tasktext"><b>${esc(r)}</b><div class="taskmeta">${i<3?'Daily':'Weekly'}</div></div><span class="pts">${[5,5,5,10,15,10][i]||5} pts</span></div>`).join('')}</div></div>
+ </section>`;
+}
+function filterTasks(cat){document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));event.target.classList.add('active');const list=state.tasks.filter(t=>t.cat===cat);document.querySelector('.list').innerHTML=list.map(taskHTML).join('')+'<button class="addrow" onclick="openAdd()">＋ Add task</button>'}
+function kidsPage(){
+ return `<section class="screen"><h1>Kids 🌸</h1><div class="sub">Their jobs, points and activities — all together.</div>
+ <div class="grid">${state.kids.map((k,i)=>`<button class="card kids" onclick="kidDetail(${i})"><div style="font-size:23px">♡</div><h3>${esc(k.name)}</h3><p>⭐ ${k.points} points · ${k.tasks.length} tasks</p></button>`).join('')}<button class="card" onclick="addKid()">＋ Add child</button></div>
+ <div class="section"><div class="section-head"><h2>Kids' tasks</h2><button class="pill" onclick="openKidTask()">＋ Add</button></div><div class="list">${state.kids.flatMap((k,ki)=>k.tasks.map((t,ti)=>`<div class="task"><button class="check" onclick="kidDone(${ki},${ti})"></button><div class="tasktext"><b>${esc(t)}</b><div class="taskmeta">${esc(k.name)}</div></div><span class="pts">5 pts</span></div>`)).join('')}</div></div>
+ </section>`;
+}
+function kidDetail(i){const k=state.kids[i];openSheet(`<h2>${esc(k.name)} 🌸</h2><div class="points-card"><div><div class="sub" style="margin:0">Their points</div><b>${k.points}</b></div><span class="pill">⭐ Keep blooming</span></div><div class="list">${k.tasks.map((t,j)=>`<div class="task"><button class="check" onclick="kidDone(${i},${j});closeModal()"></button><div class="tasktext"><b>${esc(t)}</b></div><span class="pts">5 pts</span></div>`).join('')}<button class="addrow" onclick="closeModal();openKidTask()">＋ Add task</button></div>`)}
+function calendarPage(){
+ const now=new Date(), dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+ let days='';
+ for(let i=0;i<7;i++){
+   const d=new Date(now); d.setDate(now.getDate()+i);
+   const iso=d.toISOString().slice(0,10);
+   const has=state.tasks.some(t=>t.due===iso)||i===0;
+   days+=`<div class="day ${i===0?'today':''}">${dayNames[d.getDay()]}<strong>${d.getDate()}</strong>${has?'<span class="dot"></span>':''}</div>`;
+ }
+ return `<section class="screen"><h1>Activities ⚽</h1><div class="sub">Sports, school, appointments and the little things around them.</div>
+ <div class="calendar">${days}</div>
+ <div class="list">${state.activities.map((a,i)=>`<div class="task"><span style="font-size:22px">⚽</span><div class="tasktext"><b>${esc(a.title)}</b><div class="taskmeta">${esc(a.day)} · ${esc(a.time)}</div></div><button class="pill" onclick="editActivity(${i})">Edit</button></div>`).join('')}<button class="addrow" onclick="openActivity()">＋ Add activity</button></div>
+ <div class="section"><div class="section-head"><h2>Due dates</h2><button class="pill" onclick="showPage('tasks')">Edit tasks</button></div><div class="list">${state.tasks.filter(t=>t.due).map(taskHTML).join('')||'<div class="empty">No dated tasks yet 🌿</div>'}</div></div>
+ </section>`;
+}
+function morePage(){
+ return `<section class="screen"><h1>More 🌿</h1><div class="sub">The bits that make your life yours.</div>
+ <div class="section"><div class="section-head"><h2>🛒 Shopping</h2><button class="pill" onclick="openShopping()">Edit</button></div><div class="list">${state.shopping.map((x,i)=>`<div class="task"><button class="check" onclick="shopDone(${i})"></button><div class="tasktext"><b>${esc(x)}</b></div></div>`).join('')}<button class="addrow" onclick="openShopping()">＋ Add item</button></div></div>
+ <div class="section"><div class="section-head"><h2>🎁 Rewards</h2><button class="pill" onclick="openReward()">＋ Add</button></div><div class="list">${state.rewards.map((r,i)=>`<div class="reward"><span>${r.icon} &nbsp; <b>${esc(r.title)}</b><br><small>${r.pts} points</small></span><button class="pill" onclick="claimReward(${i})">Claim</button></div>`).join('')}</div></div>
+ <div class="section"><div class="section-head"><h2>🏆 Reward history</h2></div><div class="list">${(state.rewardHistory||[]).slice().reverse().slice(0,8).map(h=>`<div class="reward"><span>✓ &nbsp; ${esc(h.title)}<br><small>${esc(h.date)}</small></span><span class="pts">-${h.pts} pts</span></div>`).join('')||'<div class="empty">No rewards claimed yet.</div>'}</div></div>
+ <div class="section"><div class="section-head"><h2>💾 Backup</h2></div><div class="list"><button class="addrow" onclick="exportData()">↓ Export my data</button><button class="addrow" onclick="importData()">↑ Import a backup</button></div></div>
+ </section>`;
+}
+function nextReward(){let n=state.rewards.map(r=>r.pts).filter(p=>p>state.points).sort((a,b)=>a-b)[0];return n? n-state.points:0}
+function showPage(p){page=p;render();window.scrollTo(0,0)}
+function openSheet(body){document.getElementById('sheet').innerHTML=body;document.getElementById('modal').classList.add('show')}
+function closeModal(){document.getElementById('modal').classList.remove('show')}
+document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()})
+function openAdd(){
+ openSheet(`<h2>Add a task</h2><div class="field"><label>Task</label><input id="fTitle" placeholder="What needs doing?"></div>
+ <div class="field"><label>Area</label><select id="fCat"><option>Home</option><option>Work</option><option>Kids</option><option>Personal</option></select></div>
+ <div class="field"><label>Points</label><input id="fPts" type="number" value="5" min="0"></div>
+ <div class="field"><label>Repeat</label><select id="fRepeat"><option>Once</option><option>Daily</option><option>Weekdays</option><option>Weekly</option><option>Fortnightly</option><option>Monthly</option></select></div>
+ <div class="field"><label>Due date (optional)</label><input id="fDue" type="date"></div>
+ <div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="addTask()">Add task</button></div>`);
+}
+function addTask(){
+ const t=document.getElementById('fTitle').value.trim(); if(!t)return;
+ state.tasks.push({id:Date.now(),title:t,cat:document.getElementById('fCat').value,pts:+document.getElementById('fPts').value||0,done:false,repeat:document.getElementById('fRepeat').value,due:document.getElementById('fDue').value});
+ closeModal();save()
+}
+function editTask(id){
+ const t=state.tasks.find(x=>x.id===id);
+ openSheet(`<h2>Edit task</h2><div class="field"><label>Task</label><input id="fTitle" value="${esc(t.title)}"></div>
+ <div class="field"><label>Area</label><select id="fCat">${['Home','Work','Kids','Personal'].map(c=>`<option ${c===t.cat?'selected':''}>${c}</option>`).join('')}</select></div>
+ <div class="field"><label>Points</label><input id="fPts" type="number" value="${t.pts}" min="0"></div>
+ <div class="field"><label>Repeat</label><select id="fRepeat">${['Once','Daily','Weekdays','Weekly','Fortnightly','Monthly'].map(c=>`<option ${c===(t.repeat||'Once')?'selected':''}>${c}</option>`).join('')}</select></div>
+ <div class="field"><label>Due date</label><input id="fDue" type="date" value="${t.due||''}"></div>
+ <div class="actions"><button class="secondary danger" onclick="state.tasks=state.tasks.filter(x=>x.id!==${id});closeModal();save()">Delete</button><button class="primary" onclick="updateTask(${id})">Save</button></div>`)
+}
+function updateTask(id){
+ let t=state.tasks.find(x=>x.id===id);
+ t.title=document.getElementById('fTitle').value.trim()||t.title;
+ t.cat=document.getElementById('fCat').value;t.pts=+document.getElementById('fPts').value||0;
+ t.repeat=document.getElementById('fRepeat').value;t.due=document.getElementById('fDue').value;
+ closeModal();save()
+}
+function toggleTask(id){let t=state.tasks.find(x=>x.id===id);if(!t)return;if(!t.done){t.done=true;state.points+=t.pts}else{t.done=false;state.points=Math.max(0,state.points-t.pts)}save()}
+function openRoutine(){openSheet(`<h2>Cleaning routines 🌿</h2><div class="field"><label>Daily / weekly routines are ready to edit in the task list. Add your own below.</label><input id="rTitle" placeholder="e.g. Change sheets"></div><div class="actions"><button class="secondary" onclick="closeModal()">Close</button><button class="primary" onclick="addRoutine()">Add routine</button></div>`)}
+function addRoutine(){let x=document.getElementById('rTitle').value.trim();if(x){state.routines.push(x);closeModal();save()}}
+function openKidTask(){openSheet(`<h2>Add a kids' task</h2><div class="field"><label>Child</label><select id="kChild">${state.kids.map((k,i)=>`<option value="${i}">${esc(k.name)}</option>`).join('')}</select></div><div class="field"><label>Task</label><input id="kTask" placeholder="e.g. Put shoes away"></div><div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="addKidTask()">Add task</button></div>`)}
+function addKidTask(){let i=+document.getElementById('kChild').value,t=document.getElementById('kTask').value.trim();if(t){state.kids[i].tasks.push(t);closeModal();save()}}
+function kidDone(i,j){state.kids[i].points+=5;state.points+=5;state.kids[i].tasks.splice(j,1);save()}
+function addKid(){openSheet(`<h2>Add a child</h2><div class="field"><label>Name</label><input id="kidName" placeholder="Child's name"></div><div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="saveKid()">Add</button></div>`)}
+function saveKid(){let n=document.getElementById('kidName').value.trim();if(n){state.kids.push({name:n,points:0,tasks:[]});closeModal();save()}}
+function openActivity(){openSheet(`<h2>Add activity</h2><div class="field"><label>Activity</label><input id="aTitle" placeholder="e.g. Soccer practice"></div><div class="field"><label>Day</label><input id="aDay" value="Today"></div><div class="field"><label>Time</label><input id="aTime" placeholder="4:30pm"></div><div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="saveActivity()">Add</button></div>`)}
+function saveActivity(){state.activities.push({title:document.getElementById('aTitle').value.trim()||'Activity',day:document.getElementById('aDay').value,time:document.getElementById('aTime').value});closeModal();save()}
+function editActivity(i){let a=state.activities[i];openSheet(`<h2>Edit activity</h2><div class="field"><label>Activity</label><input id="aTitle" value="${esc(a.title)}"></div><div class="field"><label>Day</label><input id="aDay" value="${esc(a.day)}"></div><div class="field"><label>Time</label><input id="aTime" value="${esc(a.time)}"></div><div class="actions"><button class="secondary" onclick="state.activities.splice(${i},1);closeModal();save()">Delete</button><button class="primary" onclick="state.activities[${i}]={title:document.getElementById('aTitle').value,day:document.getElementById('aDay').value,time:document.getElementById('aTime').value};closeModal();save()">Save</button></div>`)}
+function openShopping(){openSheet(`<h2>Shopping 🛒</h2><div class="list">${state.shopping.map((x,i)=>`<div class="task"><div class="tasktext"><b>${esc(x)}</b></div><button class="pill" onclick="state.shopping.splice(${i},1);closeModal();save()">Remove</button></div>`).join('')}</div><div class="field"><label>Add item</label><input id="sItem" placeholder="Type an item"></div><div class="actions"><button class="secondary" onclick="closeModal()">Done</button><button class="primary" onclick="addShopping()">Add item</button></div>`)}
+function addShopping(){let x=document.getElementById('sItem').value.trim();if(x){state.shopping.push(x);closeModal();save()}}
+function shopDone(i){state.shopping.splice(i,1);save()}
+function openReward(){openSheet(`<h2>Add a reward 🎁</h2><div class="field"><label>Reward</label><input id="rwTitle" placeholder="e.g. Favourite takeaway"></div><div class="field"><label>Points</label><input id="rwPts" type="number" value="100" min="1"></div><div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="saveReward()">Add reward</button></div>`)}
+function saveReward(){let t=document.getElementById('rwTitle').value.trim();if(t){state.rewards.push({title:t,pts:+document.getElementById('rwPts').value||100,icon:'🎁'});closeModal();save()}}
+function claimReward(i){let r=state.rewards[i];if(state.points<r.pts){alert(`You need ${r.pts-state.points} more points.`);return}if(confirm(`Claim "${r.title}" for ${r.pts} points?`)){state.points-=r.pts;save()}}
+function openSettings(){openSheet(`<h2>Your space 🌿</h2><div class="field"><label>Your name</label><input id="nm" value="${esc(state.name)}"></div><div class="field"><label>Tip</label><div style="background:var(--sage2);padding:13px;border-radius:13px">Everything is saved on this device. No account or internet connection is required for your data.</div></div><div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="state.name=document.getElementById('nm').value.trim()||'My';closeModal();save()">Save</button></div>`)}
+if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{})}
+render();
+</script>
+</body></html>
