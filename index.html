@@ -54,7 +54,7 @@ h1{font:700 30px Georgia,serif;margin:8px 0 5px}.sub{color:var(--muted);margin-b
 .day{background:var(--paper);border:1px solid var(--line);border-radius:15px;padding:8px 4px;text-align:center;font-size:11px}
 .day strong{display:block;font-size:15px;margin-top:4px}.day.today{background:var(--sage);color:#fff}.day .dot{width:6px;height:6px;border-radius:50%;background:var(--honey);display:inline-block;margin-top:5px}
 .progress{height:9px;background:#e8dfd3;border-radius:99px;overflow:hidden}.progress i{display:block;height:100%;background:var(--sage);border-radius:99px}
-.mini{font-size:11px;color:var(--muted)}.danger{background:#ead8d3;color:#80544b}
+.mini{font-size:11px;color:var(--muted)}.danger{background:#ead8d3;color:#80544b}.editbtn{background:#eee6db;padding:6px 9px;border-radius:10px;font-size:12px}.weekday-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}.weekday-grid label{background:#f1e9df;border-radius:10px;padding:8px 3px;text-align:center;font-size:11px}.weekday-grid input{margin:0 0 4px;accent-color:var(--sage)}
 @media(max-width:520px){.calendar{gap:4px}.day{padding:7px 2px}}
 </style>
 </head>
@@ -106,6 +106,9 @@ let state=JSON.parse(localStorage.getItem(key)||'null')||{
  ],
  routines:['Make beds','Dishes','Laundry','Vacuum','Clean bathrooms','Mop floors']
 };
+// Keep older saved data compatible with the newer editor/recurring-task system.
+state.tasks.forEach(t=>{t.repeat=t.repeat||'Once';t.due=t.due||'';t.days=Array.isArray(t.days)?t.days:[];t.lastDone=t.lastDone||''});
+state.rewardHistory=state.rewardHistory||[];
 let page='home';
 function save(){localStorage.setItem(key,JSON.stringify(state));render()}
 function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
@@ -129,31 +132,70 @@ function home(){
   ${tile('⚽','ACTIVITIES','activities',state.activities.length+' upcoming','calendar')}
   ${tile('🛒','SHOPPING','shopping',state.shopping.length+' items','more')}
  </div>
- <div class="section"><div class="section-head"><h2>Today</h2><button class="pill" onclick="showPage('tasks')">View all</button></div><div class="list">${state.tasks.filter(t=>!t.done).slice(0,5).map(taskHTML).join('')||'<div class="empty">Nothing urgent. Enjoy the calm 🌿</div>'}</div></div>
+ <div class="section"><div class="section-head"><h2>Today</h2><button class="pill" onclick="showPage('tasks')">View all</button></div><div class="list">${state.tasks.filter(t=>taskScheduled(t)&&!taskDoneToday(t)).slice(0,5).map(taskHTML).join('')||'<div class="empty">Nothing urgent. Enjoy the calm 🌿</div>'}</div></div>
  <div class="section"><div class="section-head"><h2>Coming up</h2><button class="pill" onclick="showPage('calendar')">See calendar</button></div><div class="list">${state.activities.slice(0,3).map(a=>`<div class="task"><span>⚽</span><div class="tasktext"><b>${esc(a.title)}</b><div class="taskmeta">${esc(a.day)} · ${esc(a.time)}</div></div></div>`).join('')}</div></div>
  </section>`;
 }
 function tile(icon,title,cls,detail,p){return `<button class="card ${cls}" onclick="showPage('${p}')"><div style="font-size:23px">${icon}</div><h3>${title}</h3><p>${detail}</p></button>`}
 function count(c){return state.tasks.filter(t=>t.cat===c&&!t.done).length+' tasks'}
-function taskHTML(t){
- let meta=[t.cat,t.repeat&&t.repeat!=='Once'?t.repeat:'',t.due?('Due '+t.due):''].filter(Boolean).join(' · ');
- return `<div class="task"><button class="check ${t.done?'done':''}" onclick="toggleTask(${t.id})"></button><div class="tasktext ${t.done?'done':''}" onclick="editTask(${t.id})"><b>${esc(t.title)}</b><div class="taskmeta">${esc(meta)}</div></div><span class="pts">${t.pts} pts</span></div>`
+function todayISO(){return new Date().toISOString().slice(0,10)}
+function dateObj(iso){const d=new Date(iso+'T12:00:00');return isNaN(d)?new Date():d}
+function dayIndex(iso){return dateObj(iso).getDay()}
+function taskScheduled(t,iso=todayISO()){
+ if(!t.repeat||t.repeat==='Once') return !t.due || t.due===iso;
+ const d=dateObj(iso), dow=d.getDay();
+ if(t.repeat==='Daily') return true;
+ if(t.repeat==='Weekdays') return dow>=1&&dow<=5;
+ if(t.repeat==='Weekly'){
+   const days=Array.isArray(t.days)&&t.days.length?t.days:(t.due?[dayIndex(t.due)]:[dow]);
+   return days.map(Number).includes(dow);
+ }
+ if(t.repeat==='Fortnightly'){
+   const anchor=t.due||iso, a=dateObj(anchor);
+   const diff=Math.floor((dateObj(iso)-a)/86400000);
+   return diff>=0 && diff%14===0;
+ }
+ if(t.repeat==='Monthly'){
+   const anchor=t.due||iso;
+   return d.getDate()===dateObj(anchor).getDate();
+ }
+ return true;
 }
+function taskDoneToday(t){return t.repeat&&t.repeat!=='Once' ? t.lastDone===todayISO() : !!t.done}
+function repeatText(t){
+ if(!t.repeat||t.repeat==='Once') return 'Once';
+ if(t.repeat==='Weekly'&&Array.isArray(t.days)&&t.days.length){const n=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];return 'Weekly · '+t.days.map(Number).sort((a,b)=>a-b).map(x=>n[x]).join(', ')}
+ return t.repeat;
+}
+function taskHTML(t){
+ const meta=[t.cat,repeatText(t),t.due?('From '+t.due):''].filter(Boolean).join(' · ');
+ const done=taskDoneToday(t);
+ return `<div class="task"><button class="check ${done?'done':''}" onclick="toggleTask(${t.id})"></button><div class="tasktext ${done?'done':''}" onclick="editTask(${t.id})"><b>${esc(t.title)}</b><div class="taskmeta">${esc(meta)}</div></div><span class="pts">${t.pts} pts</span><button class="editbtn" onclick="editTask(${t.id})">Edit</button></div>`
+}
+
 function tasksPage(){
+ const scheduled=state.tasks.filter(t=>taskScheduled(t));
  return `<section class="screen"><h1>Tasks</h1><div class="sub">Everything you need to get done, in one place.</div>
- <div class="tabs"><button class="tab active">All</button><button class="tab" onclick="filterTasks('Work')">Work</button><button class="tab" onclick="filterTasks('Home')">Home</button><button class="tab" onclick="filterTasks('Kids')">Kids</button></div>
- <div class="list">${state.tasks.map(taskHTML).join('')}<button class="addrow" onclick="openAdd()">＋ Add task</button></div>
+ <div class="tabs"><button class="tab active" onclick="filterTasks('All',this)">All</button><button class="tab" onclick="filterTasks('Work',this)">Work</button><button class="tab" onclick="filterTasks('Home',this)">Home</button><button class="tab" onclick="filterTasks('Kids',this)">Kids</button></div>
+ <div class="list" id="taskList">${scheduled.map(taskHTML).join('')||'<div class="empty">Nothing scheduled for today 🌿</div>'}<button class="addrow" onclick="openAdd()">＋ Add task</button></div>
  <div class="section"><div class="section-head"><h2>Cleaning routines</h2><button class="pill" onclick="openRoutine()">Edit</button></div><div class="list">${state.routines.map((r,i)=>`<div class="task"><button class="check"></button><div class="tasktext"><b>${esc(r)}</b><div class="taskmeta">${i<3?'Daily':'Weekly'}</div></div><span class="pts">${[5,5,5,10,15,10][i]||5} pts</span></div>`).join('')}</div></div>
  </section>`;
 }
-function filterTasks(cat){document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));event.target.classList.add('active');const list=state.tasks.filter(t=>t.cat===cat);document.querySelector('.list').innerHTML=list.map(taskHTML).join('')+'<button class="addrow" onclick="openAdd()">＋ Add task</button>'}
+
+function filterTasks(cat,btn){
+ document.querySelectorAll('.tabs .tab').forEach(b=>b.classList.remove('active')); if(btn)btn.classList.add('active');
+ const list=state.tasks.filter(t=>taskScheduled(t)&&(cat==='All'||t.cat===cat));
+ document.getElementById('taskList').innerHTML=(list.map(taskHTML).join('')||'<div class="empty">Nothing scheduled here today 🌿</div>')+'<button class="addrow" onclick="openAdd()">＋ Add task</button>';
+}
+
 function kidsPage(){
  return `<section class="screen"><h1>Kids 🌸</h1><div class="sub">Their jobs, points and activities — all together.</div>
  <div class="grid">${state.kids.map((k,i)=>`<button class="card kids" onclick="kidDetail(${i})"><div style="font-size:23px">♡</div><h3>${esc(k.name)}</h3><p>⭐ ${k.points} points · ${k.tasks.length} tasks</p></button>`).join('')}<button class="card" onclick="addKid()">＋ Add child</button></div>
- <div class="section"><div class="section-head"><h2>Kids' tasks</h2><button class="pill" onclick="openKidTask()">＋ Add</button></div><div class="list">${state.kids.flatMap((k,ki)=>k.tasks.map((t,ti)=>`<div class="task"><button class="check" onclick="kidDone(${ki},${ti})"></button><div class="tasktext"><b>${esc(t)}</b><div class="taskmeta">${esc(k.name)}</div></div><span class="pts">5 pts</span></div>`)).join('')}</div></div>
+ <div class="section"><div class="section-head"><h2>Kids' tasks</h2><button class="pill" onclick="openKidTask()">＋ Add</button></div><div class="list">${state.kids.flatMap((k,ki)=>k.tasks.map((t,ti)=>`<div class="task"><button class="check" onclick="kidDone(${ki},${ti})"></button><div class="tasktext"><b>${esc(t)}</b><div class="taskmeta">${esc(k.name)}</div></div><span class="pts">5 pts</span><button class="editbtn" onclick="editKidTask(${ki},${ti})">Edit</button></div>`)).join('')||'<div class="empty">No kids tasks yet.</div>'}</div></div>
  </section>`;
 }
-function kidDetail(i){const k=state.kids[i];openSheet(`<h2>${esc(k.name)} 🌸</h2><div class="points-card"><div><div class="sub" style="margin:0">Their points</div><b>${k.points}</b></div><span class="pill">⭐ Keep blooming</span></div><div class="list">${k.tasks.map((t,j)=>`<div class="task"><button class="check" onclick="kidDone(${i},${j});closeModal()"></button><div class="tasktext"><b>${esc(t)}</b></div><span class="pts">5 pts</span></div>`).join('')}<button class="addrow" onclick="closeModal();openKidTask()">＋ Add task</button></div>`)}
+function kidDetail(i){const k=state.kids[i];openSheet(`<h2>${esc(k.name)} 🌸</h2><div class="points-card"><div><div class="sub" style="margin:0">Their points</div><b>${k.points}</b></div><span class="pill">⭐ Keep blooming</span></div><div class="actions"><button class="secondary" onclick="editKid(${i})">Edit child</button><button class="secondary danger" onclick="deleteKid(${i})">Delete</button></div><div class="list" style="margin-top:14px">${k.tasks.map((t,j)=>`<div class="task"><button class="check" onclick="kidDone(${i},${j});closeModal()"></button><div class="tasktext"><b>${esc(t)}</b></div><span class="pts">5 pts</span><button class="editbtn" onclick="editKidTask(${i},${j})">Edit</button></div>`).join('')||'<div class="empty">No tasks yet.</div>'}<button class="addrow" onclick="closeModal();openKidTask()">＋ Add task</button></div>`)}
+
 function calendarPage(){
  const now=new Date(), dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
  let days='';
@@ -172,7 +214,7 @@ function calendarPage(){
 function morePage(){
  return `<section class="screen"><h1>More 🌿</h1><div class="sub">The bits that make your life yours.</div>
  <div class="section"><div class="section-head"><h2>🛒 Shopping</h2><button class="pill" onclick="openShopping()">Edit</button></div><div class="list">${state.shopping.map((x,i)=>`<div class="task"><button class="check" onclick="shopDone(${i})"></button><div class="tasktext"><b>${esc(x)}</b></div></div>`).join('')}<button class="addrow" onclick="openShopping()">＋ Add item</button></div></div>
- <div class="section"><div class="section-head"><h2>🎁 Rewards</h2><button class="pill" onclick="openReward()">＋ Add</button></div><div class="list">${state.rewards.map((r,i)=>`<div class="reward"><span>${r.icon} &nbsp; <b>${esc(r.title)}</b><br><small>${r.pts} points</small></span><button class="pill" onclick="claimReward(${i})">Claim</button></div>`).join('')}</div></div>
+ <div class="section"><div class="section-head"><h2>🎁 Rewards</h2><button class="pill" onclick="openReward()">＋ Add</button></div><div class="list">${state.rewards.map((r,i)=>`<div class="reward"><span>${r.icon} &nbsp; <b>${esc(r.title)}</b><br><small>${r.pts} points</small></span><span style="display:flex;gap:6px"><button class="editbtn" onclick="editReward(${i})">Edit</button><button class="pill" onclick="claimReward(${i})">Claim</button></span></div>`).join('')}</div></div>
  <div class="section"><div class="section-head"><h2>🏆 Reward history</h2></div><div class="list">${(state.rewardHistory||[]).slice().reverse().slice(0,8).map(h=>`<div class="reward"><span>✓ &nbsp; ${esc(h.title)}<br><small>${esc(h.date)}</small></span><span class="pts">-${h.pts} pts</span></div>`).join('')||'<div class="empty">No rewards claimed yet.</div>'}</div></div>
  <div class="section"><div class="section-head"><h2>💾 Backup</h2></div><div class="list"><button class="addrow" onclick="exportData()">↓ Export my data</button><button class="addrow" onclick="importData()">↑ Import a backup</button></div></div>
  </section>`;
@@ -182,36 +224,27 @@ function showPage(p){page=p;render();window.scrollTo(0,0)}
 function openSheet(body){document.getElementById('sheet').innerHTML=body;document.getElementById('modal').classList.add('show')}
 function closeModal(){document.getElementById('modal').classList.remove('show')}
 document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()})
-function openAdd(){
- openSheet(`<h2>Add a task</h2><div class="field"><label>Task</label><input id="fTitle" placeholder="What needs doing?"></div>
- <div class="field"><label>Area</label><select id="fCat"><option>Home</option><option>Work</option><option>Kids</option><option>Personal</option></select></div>
- <div class="field"><label>Points</label><input id="fPts" type="number" value="5" min="0"></div>
- <div class="field"><label>Repeat</label><select id="fRepeat"><option>Once</option><option>Daily</option><option>Weekdays</option><option>Weekly</option><option>Fortnightly</option><option>Monthly</option></select></div>
- <div class="field"><label>Due date (optional)</label><input id="fDue" type="date"></div>
- <div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="addTask()">Add task</button></div>`);
+function weekdayChecks(selected=[]){const names=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];return `<div class="weekday-grid">${names.map((n,i)=>`<label><input type="checkbox" name="fDays" value="${i}" ${selected.map(Number).includes(i)?'checked':''}><br>${n}</label>`).join('')}</div>`}
+function selectedDays(){return [...document.querySelectorAll('input[name="fDays"]:checked')].map(x=>+x.value)}
+function taskForm(t={},editing=false){
+ const days=t.days||((t.repeat==='Weekdays')?[1,2,3,4,5]:[]);
+ return `<div class="field"><label>Task name</label><input id="fTitle" value="${esc(t.title||'')}" placeholder="What needs doing?"></div>
+ <div class="field"><label>Area</label><select id="fCat">${['Home','Work','Kids','Personal'].map(c=>`<option ${c===(t.cat||'Home')?'selected':''}>${c}</option>`).join('')}</select></div>
+ <div class="field"><label>Points</label><input id="fPts" type="number" value="${t.pts??5}" min="0"></div>
+ <div class="field"><label>Repeat</label><select id="fRepeat" onchange="toggleDayPicker()">${['Once','Daily','Weekdays','Weekly','Fortnightly','Monthly'].map(c=>`<option ${c===(t.repeat||'Once')?'selected':''}>${c}</option>`).join('')}</select></div>
+ <div class="field" id="dayPicker" style="display:${t.repeat==='Weekly'?'block':'none'}"><label>Which days? (for Weekly)</label>${weekdayChecks(days)}</div>
+ <div class="field"><label>${t.repeat&&t.repeat!=='Once'?'Start / anchor date (optional)':'Due date (optional)'}</label><input id="fDue" type="date" value="${t.due||''}"></div>
+ <div class="mini">Tip: Weekly lets you choose multiple days. Recurring tasks automatically become available again on their scheduled days.</div>`;
 }
-function addTask(){
- const t=document.getElementById('fTitle').value.trim(); if(!t)return;
- state.tasks.push({id:Date.now(),title:t,cat:document.getElementById('fCat').value,pts:+document.getElementById('fPts').value||0,done:false,repeat:document.getElementById('fRepeat').value,due:document.getElementById('fDue').value});
- closeModal();save()
-}
-function editTask(id){
- const t=state.tasks.find(x=>x.id===id);
- openSheet(`<h2>Edit task</h2><div class="field"><label>Task</label><input id="fTitle" value="${esc(t.title)}"></div>
- <div class="field"><label>Area</label><select id="fCat">${['Home','Work','Kids','Personal'].map(c=>`<option ${c===t.cat?'selected':''}>${c}</option>`).join('')}</select></div>
- <div class="field"><label>Points</label><input id="fPts" type="number" value="${t.pts}" min="0"></div>
- <div class="field"><label>Repeat</label><select id="fRepeat">${['Once','Daily','Weekdays','Weekly','Fortnightly','Monthly'].map(c=>`<option ${c===(t.repeat||'Once')?'selected':''}>${c}</option>`).join('')}</select></div>
- <div class="field"><label>Due date</label><input id="fDue" type="date" value="${t.due||''}"></div>
- <div class="actions"><button class="secondary danger" onclick="state.tasks=state.tasks.filter(x=>x.id!==${id});closeModal();save()">Delete</button><button class="primary" onclick="updateTask(${id})">Save</button></div>`)
-}
-function updateTask(id){
- let t=state.tasks.find(x=>x.id===id);
- t.title=document.getElementById('fTitle').value.trim()||t.title;
- t.cat=document.getElementById('fCat').value;t.pts=+document.getElementById('fPts').value||0;
- t.repeat=document.getElementById('fRepeat').value;t.due=document.getElementById('fDue').value;
- closeModal();save()
-}
-function toggleTask(id){let t=state.tasks.find(x=>x.id===id);if(!t)return;if(!t.done){t.done=true;state.points+=t.pts}else{t.done=false;state.points=Math.max(0,state.points-t.pts)}save()}
+function toggleDayPicker(){const r=document.getElementById('fRepeat').value;document.getElementById('dayPicker').style.display=r==='Weekly'?'block':'none';}
+function openAdd(){openSheet(`<h2>Add a task</h2>${taskForm({})}<div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="addTask()">Add task</button></div>`)}
+function addTask(){const title=document.getElementById('fTitle').value.trim();if(!title)return;const repeat=document.getElementById('fRepeat').value;let days=selectedDays();if(repeat==='Weekdays')days=[1,2,3,4,5];state.tasks.push({id:Date.now(),title,cat:document.getElementById('fCat').value,pts:+document.getElementById('fPts').value||0,done:false,lastDone:'',repeat,due:document.getElementById('fDue').value,days});closeModal();save()}
+function editTask(id){const t=state.tasks.find(x=>x.id===id);if(!t)return;openSheet(`<h2>Edit task ✏️</h2>${taskForm(t,true)}<div class="actions"><button class="secondary danger" onclick="deleteTask(${id})">Delete</button><button class="primary" onclick="updateTask(${id})">Save changes</button></div>`)}
+function updateTask(id){let t=state.tasks.find(x=>x.id===id);if(!t)return;const repeat=document.getElementById('fRepeat').value;let days=selectedDays();if(repeat==='Weekdays')days=[1,2,3,4,5];t.title=document.getElementById('fTitle').value.trim()||t.title;t.cat=document.getElementById('fCat').value;t.pts=+document.getElementById('fPts').value||0;t.repeat=repeat;t.due=document.getElementById('fDue').value;t.days=days;closeModal();save()}
+function deleteTask(id){if(confirm('Delete this task?')){state.tasks=state.tasks.filter(x=>x.id!==id);closeModal();save()}}
+
+function toggleTask(id){let t=state.tasks.find(x=>x.id===id);if(!t)return;const done=taskDoneToday(t);if(!done){if(t.repeat&&t.repeat!=='Once')t.lastDone=todayISO();else t.done=true;state.points+=t.pts}else{if(t.repeat&&t.repeat!=='Once')t.lastDone='';else t.done=false;state.points=Math.max(0,state.points-t.pts)}save()}
+
 function openRoutine(){openSheet(`<h2>Cleaning routines 🌿</h2><div class="field"><label>Daily / weekly routines are ready to edit in the task list. Add your own below.</label><input id="rTitle" placeholder="e.g. Change sheets"></div><div class="actions"><button class="secondary" onclick="closeModal()">Close</button><button class="primary" onclick="addRoutine()">Add routine</button></div>`)}
 function addRoutine(){let x=document.getElementById('rTitle').value.trim();if(x){state.routines.push(x);closeModal();save()}}
 function openKidTask(){openSheet(`<h2>Add a kids' task</h2><div class="field"><label>Child</label><select id="kChild">${state.kids.map((k,i)=>`<option value="${i}">${esc(k.name)}</option>`).join('')}</select></div><div class="field"><label>Task</label><input id="kTask" placeholder="e.g. Put shoes away"></div><div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="addKidTask()">Add task</button></div>`)}
@@ -219,6 +252,10 @@ function addKidTask(){let i=+document.getElementById('kChild').value,t=document.
 function kidDone(i,j){state.kids[i].points+=5;state.points+=5;state.kids[i].tasks.splice(j,1);save()}
 function addKid(){openSheet(`<h2>Add a child</h2><div class="field"><label>Name</label><input id="kidName" placeholder="Child's name"></div><div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="saveKid()">Add</button></div>`)}
 function saveKid(){let n=document.getElementById('kidName').value.trim();if(n){state.kids.push({name:n,points:0,tasks:[]});closeModal();save()}}
+function editKid(i){const k=state.kids[i];openSheet(`<h2>Edit ${esc(k.name)} ✏️</h2><div class="field"><label>Child's name</label><input id="kidName" value="${esc(k.name)}"></div><div class="actions"><button class="secondary" onclick="closeModal();kidDetail(${i})">Cancel</button><button class="primary" onclick="state.kids[${i}].name=document.getElementById('kidName').value.trim()||state.kids[${i}].name;closeModal();save()">Save name</button></div>`)}
+function deleteKid(i){if(confirm(`Delete ${state.kids[i].name} and their tasks?`)){state.kids.splice(i,1);closeModal();save()}}
+function editKidTask(ki,ti){const k=state.kids[ki], old=k.tasks[ti];openSheet(`<h2>Edit kids' task ✏️</h2><div class="field"><label>Task</label><input id="ktEdit" value="${esc(old)}"></div><div class="actions"><button class="secondary danger" onclick="deleteKidTask(${ki},${ti})">Delete</button><button class="primary" onclick="k=state.kids[${ki}];k.tasks[${ti}]=document.getElementById('ktEdit').value.trim()||k.tasks[${ti}];closeModal();save()">Save</button></div>`)}
+function deleteKidTask(ki,ti){if(confirm('Delete this kids’ task?')){state.kids[ki].tasks.splice(ti,1);closeModal();save()}}
 function openActivity(){openSheet(`<h2>Add activity</h2><div class="field"><label>Activity</label><input id="aTitle" placeholder="e.g. Soccer practice"></div><div class="field"><label>Day</label><input id="aDay" value="Today"></div><div class="field"><label>Time</label><input id="aTime" placeholder="4:30pm"></div><div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="saveActivity()">Add</button></div>`)}
 function saveActivity(){state.activities.push({title:document.getElementById('aTitle').value.trim()||'Activity',day:document.getElementById('aDay').value,time:document.getElementById('aTime').value});closeModal();save()}
 function editActivity(i){let a=state.activities[i];openSheet(`<h2>Edit activity</h2><div class="field"><label>Activity</label><input id="aTitle" value="${esc(a.title)}"></div><div class="field"><label>Day</label><input id="aDay" value="${esc(a.day)}"></div><div class="field"><label>Time</label><input id="aTime" value="${esc(a.time)}"></div><div class="actions"><button class="secondary" onclick="state.activities.splice(${i},1);closeModal();save()">Delete</button><button class="primary" onclick="state.activities[${i}]={title:document.getElementById('aTitle').value,day:document.getElementById('aDay').value,time:document.getElementById('aTime').value};closeModal();save()">Save</button></div>`)}
@@ -227,7 +264,9 @@ function addShopping(){let x=document.getElementById('sItem').value.trim();if(x)
 function shopDone(i){state.shopping.splice(i,1);save()}
 function openReward(){openSheet(`<h2>Add a reward 🎁</h2><div class="field"><label>Reward</label><input id="rwTitle" placeholder="e.g. Favourite takeaway"></div><div class="field"><label>Points</label><input id="rwPts" type="number" value="100" min="1"></div><div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="saveReward()">Add reward</button></div>`)}
 function saveReward(){let t=document.getElementById('rwTitle').value.trim();if(t){state.rewards.push({title:t,pts:+document.getElementById('rwPts').value||100,icon:'🎁'});closeModal();save()}}
-function claimReward(i){let r=state.rewards[i];if(state.points<r.pts){alert(`You need ${r.pts-state.points} more points.`);return}if(confirm(`Claim "${r.title}" for ${r.pts} points?`)){state.points-=r.pts;save()}}
+function claimReward(i){let r=state.rewards[i];if(state.points<r.pts){alert(`You need ${r.pts-state.points} more points.`);return}if(confirm(`Claim "${r.title}" for ${r.pts} points?`)){state.points-=r.pts;state.rewardHistory=state.rewardHistory||[];state.rewardHistory.push({title:r.title,pts:r.pts,date:new Date().toLocaleDateString()});save()}}
+function editReward(i){const r=state.rewards[i];openSheet(`<h2>Edit reward ✏️</h2><div class="field"><label>Reward</label><input id="rwTitle" value="${esc(r.title)}"></div><div class="field"><label>Points</label><input id="rwPts" type="number" value="${r.pts}" min="1"></div><div class="actions"><button class="secondary danger" onclick="deleteReward(${i})">Delete</button><button class="primary" onclick="state.rewards[${i}].title=document.getElementById('rwTitle').value.trim()||state.rewards[${i}].title;state.rewards[${i}].pts=+document.getElementById('rwPts').value||state.rewards[${i}].pts;closeModal();save()">Save</button></div>`)}
+function deleteReward(i){if(confirm('Delete this reward?')){state.rewards.splice(i,1);closeModal();save()}}
 function openSettings(){openSheet(`<h2>Your space 🌿</h2><div class="field"><label>Your name</label><input id="nm" value="${esc(state.name)}"></div><div class="field"><label>Tip</label><div style="background:var(--sage2);padding:13px;border-radius:13px">Everything is saved on this device. No account or internet connection is required for your data.</div></div><div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="state.name=document.getElementById('nm').value.trim()||'My';closeModal();save()">Save</button></div>`)}
 if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{})}
 render();
