@@ -77,7 +77,7 @@ h1{font:700 30px Georgia,serif;margin:8px 0 5px}.sub{color:var(--muted);margin-b
 <script>
 const key='blh-v1';
 let state=JSON.parse(localStorage.getItem(key)||'null')||{
- name:'My', points:245,
+ name:'My', points:0,
  tasks:[
   {id:1,title:'Reply to emails',cat:'Work',pts:5,done:false,repeat:'Once',due:''},
   {id:2,title:'Finish project report',cat:'Work',pts:25,done:false,repeat:'Once',due:''},
@@ -88,8 +88,8 @@ let state=JSON.parse(localStorage.getItem(key)||'null')||{
   {id:7,title:'Tidy bedroom',cat:'Kids',pts:10,done:false,repeat:'Weekly',due:''}
  ],
  kids:[
-  {name:'Eadie',points:180,tasks:['Make bed','Put clothes away','Pack school bag','Tidy bedroom','Feed the pet']},
-  {name:'Child 2',points:240,tasks:['Make bed','Homework','Put dishes away']}
+  {name:'Eadie',points:0,tasks:['Make bed','Put clothes away','Pack school bag','Tidy bedroom','Feed the pet']},
+  {name:'Child 2',points:0,tasks:['Make bed','Homework','Put dishes away']}
  ],
  shopping:['Milk','Bread','Eggs','Chicken','Bananas','School snacks'],
  activities:[
@@ -106,9 +106,27 @@ let state=JSON.parse(localStorage.getItem(key)||'null')||{
  ],
  routines:['Make beds','Dishes','Laundry','Vacuum','Clean bathrooms','Mop floors']
 };
-// Keep older saved data compatible with the newer editor/recurring-task system.
-state.tasks.forEach(t=>{t.repeat=t.repeat||'Once';t.due=t.due||'';t.days=Array.isArray(t.days)?t.days:[];t.lastDone=t.lastDone||''});
+// v5 data upgrade: every task type uses the same recurring-task system.
+state.tasks=Array.isArray(state.tasks)?state.tasks:[];
+state.tasks.forEach(t=>{t.repeat=t.repeat||'Once';t.due=t.due||'';t.days=Array.isArray(t.days)?t.days:[];t.lastDone=t.lastDone||'';t.pts=Number.isFinite(+t.pts)?+t.pts:0});
 state.rewardHistory=state.rewardHistory||[];
+state.routines=Array.isArray(state.routines)?state.routines:[];
+// Convert older kids' task strings into full recurring task objects.
+state.kids=(state.kids||[]).map((k,ki)=>{
+  k.points=0;
+  k.tasks=(k.tasks||[]).map((t,ti)=>typeof t==='string'?{id:'k'+ki+'-'+ti+'-'+Date.now(),title:t,pts:5,repeat:'Once',due:'',days:[],lastDone:'',done:false}:Object.assign({pts:5,repeat:'Once',due:'',days:[],lastDone:'',done:false},t));
+  return k;
+});
+// Convert older cleaning routines into full recurring tasks.
+state.routines=state.routines.map((r,i)=>typeof r==='string'?{id:'r'+i,title:r,pts:[5,5,5,10,15,10][i]||5,repeat:i<3?'Daily':'Weekly',due:'',days:i<3?[1,2,3,4,5,6,0]:[6],lastDone:'',done:false}:r);
+// v5 is still setup mode: wipe all current point balances and reward history once.
+if(!state.__v5SetupReset){
+  state.points=0;
+  state.kids.forEach(k=>k.points=0);
+  state.rewardHistory=[];
+  state.__v5SetupReset=true;
+  localStorage.setItem(key,JSON.stringify(state));
+}
 let page='home';
 function save(){localStorage.setItem(key,JSON.stringify(state));render()}
 function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
@@ -144,6 +162,7 @@ function dayIndex(iso){return dateObj(iso).getDay()}
 function taskScheduled(t,iso=todayISO()){
  if(!t.repeat||t.repeat==='Once') return !t.due || t.due===iso;
  const d=dateObj(iso), dow=d.getDay();
+ if(t.due && iso < t.due) return false;
  if(t.repeat==='Daily') return true;
  if(t.repeat==='Weekdays') return dow>=1&&dow<=5;
  if(t.repeat==='Weekly'){
@@ -152,6 +171,8 @@ function taskScheduled(t,iso=todayISO()){
  }
  if(t.repeat==='Fortnightly'){
    const anchor=t.due||iso, a=dateObj(anchor);
+   const days=Array.isArray(t.days)&&t.days.length?t.days:[a.getDay()];
+   if(!days.map(Number).includes(dow)) return false;
    const diff=Math.floor((dateObj(iso)-a)/86400000);
    return diff>=0 && diff%14===0;
  }
@@ -161,16 +182,28 @@ function taskScheduled(t,iso=todayISO()){
  }
  return true;
 }
-function taskDoneToday(t){return t.repeat&&t.repeat!=='Once' ? t.lastDone===todayISO() : !!t.done}
+function taskDoneOn(t,iso=todayISO()){return t.repeat&&t.repeat!=='Once' ? t.lastDone===iso : !!t.done}
+function taskDoneToday(t){return taskDoneOn(t,todayISO())}
 function repeatText(t){
  if(!t.repeat||t.repeat==='Once') return 'Once';
- if(t.repeat==='Weekly'&&Array.isArray(t.days)&&t.days.length){const n=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];return 'Weekly · '+t.days.map(Number).sort((a,b)=>a-b).map(x=>n[x]).join(', ')}
+ const n=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+ if((t.repeat==='Weekly'||t.repeat==='Fortnightly')&&Array.isArray(t.days)&&t.days.length){return t.repeat+' · '+t.days.map(Number).sort((a,b)=>a-b).map(x=>n[x]).join(', ')}
+ if(t.repeat==='Weekdays') return 'Weekdays';
  return t.repeat;
 }
-function taskHTML(t){
+function allTaskCollections(){
+ return [
+  ...state.tasks.map(t=>({kind:'main',task:t})),
+  ...state.routines.map(t=>({kind:'routine',task:t})),
+  ...state.kids.flatMap((k,ki)=>k.tasks.map((t,ti)=>({kind:'kid',task:t,ki,ti})))
+ ];
+}
+function taskHTML(t,kind='main'){
  const meta=[t.cat,repeatText(t),t.due?('From '+t.due):''].filter(Boolean).join(' · ');
  const done=taskDoneToday(t);
- return `<div class="task"><button class="check ${done?'done':''}" onclick="toggleTask(${t.id})"></button><div class="tasktext ${done?'done':''}" onclick="editTask(${t.id})"><b>${esc(t.title)}</b><div class="taskmeta">${esc(meta)}</div></div><span class="pts">${t.pts} pts</span><button class="editbtn" onclick="editTask(${t.id})">Edit</button></div>`
+ const edit=kind==='main'?`editTask(${t.id})`:kind==='routine'?`editRoutine(${t.id})`:'';
+ const check=kind==='main'?`toggleTask(${t.id})`:kind==='routine'?`toggleRoutine(${t.id})`:'';
+ return `<div class="task"><button class="check ${done?'done':''}" onclick="${check}"></button><div class="tasktext ${done?'done':''}" onclick="${edit}"><b>${esc(t.title)}</b><div class="taskmeta">${esc(meta)}</div></div><span class="pts">${t.pts||0} pts</span><button class="editbtn" onclick="${edit}">Edit</button></div>`
 }
 
 function tasksPage(){
@@ -178,7 +211,7 @@ function tasksPage(){
  return `<section class="screen"><h1>Tasks</h1><div class="sub">Everything you need to get done, in one place.</div>
  <div class="tabs"><button class="tab active" onclick="filterTasks('All',this)">All</button><button class="tab" onclick="filterTasks('Work',this)">Work</button><button class="tab" onclick="filterTasks('Home',this)">Home</button><button class="tab" onclick="filterTasks('Kids',this)">Kids</button></div>
  <div class="list" id="taskList">${scheduled.map(taskHTML).join('')||'<div class="empty">Nothing scheduled for today 🌿</div>'}<button class="addrow" onclick="openAdd()">＋ Add task</button></div>
- <div class="section"><div class="section-head"><h2>Cleaning routines</h2><button class="pill" onclick="openRoutine()">Edit</button></div><div class="list">${state.routines.map((r,i)=>`<div class="task"><button class="check"></button><div class="tasktext"><b>${esc(r)}</b><div class="taskmeta">${i<3?'Daily':'Weekly'}</div></div><span class="pts">${[5,5,5,10,15,10][i]||5} pts</span></div>`).join('')}</div></div>
+ <div class="section"><div class="section-head"><h2>Cleaning routines 🌿</h2><button class="pill" onclick="openRoutine()">＋ Add</button></div><div class="list">${state.routines.filter(t=>taskScheduled(t)).map(t=>taskHTML(t,'routine')).join('')||'<div class="empty">Nothing scheduled for cleaning today.</div>'}</div><button class="addrow" onclick="openRoutine()">＋ Add cleaning task</button></div>
  </section>`;
 }
 
@@ -191,10 +224,10 @@ function filterTasks(cat,btn){
 function kidsPage(){
  return `<section class="screen"><h1>Kids 🌸</h1><div class="sub">Their jobs, points and activities — all together.</div>
  <div class="grid">${state.kids.map((k,i)=>`<button class="card kids" onclick="kidDetail(${i})"><div style="font-size:23px">♡</div><h3>${esc(k.name)}</h3><p>⭐ ${k.points} points · ${k.tasks.length} tasks</p></button>`).join('')}<button class="card" onclick="addKid()">＋ Add child</button></div>
- <div class="section"><div class="section-head"><h2>Kids' tasks</h2><button class="pill" onclick="openKidTask()">＋ Add</button></div><div class="list">${state.kids.flatMap((k,ki)=>k.tasks.map((t,ti)=>`<div class="task"><button class="check" onclick="kidDone(${ki},${ti})"></button><div class="tasktext"><b>${esc(t)}</b><div class="taskmeta">${esc(k.name)}</div></div><span class="pts">5 pts</span><button class="editbtn" onclick="editKidTask(${ki},${ti})">Edit</button></div>`)).join('')||'<div class="empty">No kids tasks yet.</div>'}</div></div>
+ <div class="section"><div class="section-head"><h2>Kids' tasks</h2><button class="pill" onclick="openKidTask()">＋ Add</button></div><div class="list">${state.kids.flatMap((k,ki)=>k.tasks.filter(t=>taskScheduled(t)).map((t,ti)=>`<div class="task"><button class="check ${taskDoneToday(t)?'done':''}" onclick="kidDone(${ki},${ti})"></button><div class="tasktext ${taskDoneToday(t)?'done':''}" onclick="editKidTask(${ki},${ti})"><b>${esc(t.title)}</b><div class="taskmeta">${esc(k.name)} · ${esc(repeatText(t))}</div></div><span class="pts">${t.pts} pts</span><button class="editbtn" onclick="editKidTask(${ki},${ti})">Edit</button></div>`)).join('')||'<div class="empty">Nothing scheduled for the kids today.</div>'}</div></div>
  </section>`;
 }
-function kidDetail(i){const k=state.kids[i];openSheet(`<h2>${esc(k.name)} 🌸</h2><div class="points-card"><div><div class="sub" style="margin:0">Their points</div><b>${k.points}</b></div><span class="pill">⭐ Keep blooming</span></div><div class="actions"><button class="secondary" onclick="editKid(${i})">Edit child</button><button class="secondary danger" onclick="deleteKid(${i})">Delete</button></div><div class="list" style="margin-top:14px">${k.tasks.map((t,j)=>`<div class="task"><button class="check" onclick="kidDone(${i},${j});closeModal()"></button><div class="tasktext"><b>${esc(t)}</b></div><span class="pts">5 pts</span><button class="editbtn" onclick="editKidTask(${i},${j})">Edit</button></div>`).join('')||'<div class="empty">No tasks yet.</div>'}<button class="addrow" onclick="closeModal();openKidTask()">＋ Add task</button></div>`)}
+function kidDetail(i){const k=state.kids[i];openSheet(`<h2>${esc(k.name)} 🌸</h2><div class="points-card"><div><div class="sub" style="margin:0">Their points</div><b>${k.points}</b></div><span class="pill">⭐ Keep blooming</span></div><div class="actions"><button class="secondary" onclick="editKid(${i})">Edit child</button><button class="secondary danger" onclick="deleteKid(${i})">Delete</button></div><div class="list" style="margin-top:14px">${k.tasks.map((t,j)=>`<div class="task"><button class="check ${taskDoneToday(t)?'done':''}" onclick="kidDone(${i},${j});closeModal()"></button><div class="tasktext ${taskDoneToday(t)?'done':''}" onclick="editKidTask(${i},${j})"><b>${esc(t.title)}</b><div class="taskmeta">${esc(repeatText(t))}${t.due?' · From '+esc(t.due):''}</div></div><span class="pts">${t.pts} pts</span><button class="editbtn" onclick="editKidTask(${i},${j})">Edit</button></div>`).join('')||'<div class="empty">No tasks yet.</div>'}<button class="addrow" onclick="closeModal();openKidTask()">＋ Add task</button></div>`)}
 
 function calendarPage(){
  const now=new Date(), dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -202,19 +235,20 @@ function calendarPage(){
  for(let i=0;i<7;i++){
    const d=new Date(now); d.setDate(now.getDate()+i);
    const iso=d.toISOString().slice(0,10);
-   const has=state.tasks.some(t=>t.due===iso)||i===0;
+   const has=allTaskCollections().some(x=>taskScheduled(x.task,iso))||i===0;
    days+=`<div class="day ${i===0?'today':''}">${dayNames[d.getDay()]}<strong>${d.getDate()}</strong>${has?'<span class="dot"></span>':''}</div>`;
  }
  return `<section class="screen"><h1>Activities ⚽</h1><div class="sub">Sports, school, appointments and the little things around them.</div>
  <div class="calendar">${days}</div>
  <div class="list">${state.activities.map((a,i)=>`<div class="task"><span style="font-size:22px">⚽</span><div class="tasktext"><b>${esc(a.title)}</b><div class="taskmeta">${esc(a.day)} · ${esc(a.time)}</div></div><button class="pill" onclick="editActivity(${i})">Edit</button></div>`).join('')}<button class="addrow" onclick="openActivity()">＋ Add activity</button></div>
- <div class="section"><div class="section-head"><h2>Due dates</h2><button class="pill" onclick="showPage('tasks')">Edit tasks</button></div><div class="list">${state.tasks.filter(t=>t.due).map(taskHTML).join('')||'<div class="empty">No dated tasks yet 🌿</div>'}</div></div>
+ <div class="section"><div class="section-head"><h2>Due dates</h2><button class="pill" onclick="showPage('tasks')">Edit tasks</button></div><div class="list">${allTaskCollections().filter(x=>x.task.due).map(x=>taskHTML(x.task,x.kind)).join('')||'<div class="empty">No dated tasks yet 🌿</div>'}</div></div>
  </section>`;
 }
 function morePage(){
  return `<section class="screen"><h1>More 🌿</h1><div class="sub">The bits that make your life yours.</div>
  <div class="section"><div class="section-head"><h2>🛒 Shopping</h2><button class="pill" onclick="openShopping()">Edit</button></div><div class="list">${state.shopping.map((x,i)=>`<div class="task"><button class="check" onclick="shopDone(${i})"></button><div class="tasktext"><b>${esc(x)}</b></div></div>`).join('')}<button class="addrow" onclick="openShopping()">＋ Add item</button></div></div>
- <div class="section"><div class="section-head"><h2>🎁 Rewards</h2><button class="pill" onclick="openReward()">＋ Add</button></div><div class="list">${state.rewards.map((r,i)=>`<div class="reward"><span>${r.icon} &nbsp; <b>${esc(r.title)}</b><br><small>${r.pts} points</small></span><span style="display:flex;gap:6px"><button class="editbtn" onclick="editReward(${i})">Edit</button><button class="pill" onclick="claimReward(${i})">Claim</button></span></div>`).join('')}</div></div>
+ <div class="section"><div class="section-head"><h2>🎁 Rewards</h2><button class="pill" onclick="openReward()">＋ Add</button></div><div class="list">${state.rewards.map((r,i)=>`<div class="reward"><span>${r.icon} &nbsp; <b>${esc(r.title)}</b><br><small>${r.pts} points</small></span><span style="display:flex;gap:6px"><button class="editbtn" onclick="editReward(${i})">Edit</button><button class="pill" onclick="claimReward(${i})">Claim · ${r.pts}</button></span></div>`).join('')}</div></div>
+ <div class="section"><div class="section-head"><h2>⭐ Points</h2></div><div class="list"><button class="addrow" onclick="resetPoints()">↺ Reset my points to 0</button><div class="mini" style="padding:10px 15px">Claiming a reward automatically deducts its point cost. Use reset if you want to start a fresh points round.</div></div></div>
  <div class="section"><div class="section-head"><h2>🏆 Reward history</h2></div><div class="list">${(state.rewardHistory||[]).slice().reverse().slice(0,8).map(h=>`<div class="reward"><span>✓ &nbsp; ${esc(h.title)}<br><small>${esc(h.date)}</small></span><span class="pts">-${h.pts} pts</span></div>`).join('')||'<div class="empty">No rewards claimed yet.</div>'}</div></div>
  <div class="section"><div class="section-head"><h2>💾 Backup</h2></div><div class="list"><button class="addrow" onclick="exportData()">↓ Export my data</button><button class="addrow" onclick="importData()">↑ Import a backup</button></div></div>
  </section>`;
@@ -228,33 +262,46 @@ function weekdayChecks(selected=[]){const names=['Sun','Mon','Tue','Wed','Thu','
 function selectedDays(){return [...document.querySelectorAll('input[name="fDays"]:checked')].map(x=>+x.value)}
 function taskForm(t={},editing=false){
  const days=t.days||((t.repeat==='Weekdays')?[1,2,3,4,5]:[]);
+ const showDays=['Weekly','Fortnightly'].includes(t.repeat);
  return `<div class="field"><label>Task name</label><input id="fTitle" value="${esc(t.title||'')}" placeholder="What needs doing?"></div>
  <div class="field"><label>Area</label><select id="fCat">${['Home','Work','Kids','Personal'].map(c=>`<option ${c===(t.cat||'Home')?'selected':''}>${c}</option>`).join('')}</select></div>
- <div class="field"><label>Points</label><input id="fPts" type="number" value="${t.pts??5}" min="0"></div>
+ <div class="field"><label>Points</label><input id="fPts" type="number" value="${t.pts??0}" min="0"></div>
  <div class="field"><label>Repeat</label><select id="fRepeat" onchange="toggleDayPicker()">${['Once','Daily','Weekdays','Weekly','Fortnightly','Monthly'].map(c=>`<option ${c===(t.repeat||'Once')?'selected':''}>${c}</option>`).join('')}</select></div>
- <div class="field" id="dayPicker" style="display:${t.repeat==='Weekly'?'block':'none'}"><label>Which days? (for Weekly)</label>${weekdayChecks(days)}</div>
- <div class="field"><label>${t.repeat&&t.repeat!=='Once'?'Start / anchor date (optional)':'Due date (optional)'}</label><input id="fDue" type="date" value="${t.due||''}"></div>
- <div class="mini">Tip: Weekly lets you choose multiple days. Recurring tasks automatically become available again on their scheduled days.</div>`;
+ <div class="field" id="dayPicker" style="display:${showDays?'block':'none'}"><label>Which day(s)?</label>${weekdayChecks(days)}</div>
+ <div class="field"><label>${t.repeat&&t.repeat!=='Once'?'Start / first occurrence':'Due date (optional)'}</label><input id="fDue" type="date" value="${t.due||''}"></div>
+ <div class="mini">Choose the exact day(s) for Weekly or Fortnightly. Fortnightly repeats every 2 weeks from the start date.</div>`;
 }
-function toggleDayPicker(){const r=document.getElementById('fRepeat').value;document.getElementById('dayPicker').style.display=r==='Weekly'?'block':'none';}
+function toggleDayPicker(){const r=document.getElementById('fRepeat').value;document.getElementById('dayPicker').style.display=['Weekly','Fortnightly'].includes(r)?'block':'none';}
+function collectSchedule(){const repeat=document.getElementById('fRepeat').value;let days=selectedDays();let due=document.getElementById('fDue').value;if(repeat==='Weekdays')days=[1,2,3,4,5];if(['Weekly','Fortnightly'].includes(repeat)&&!days.length){due=due||todayISO();days=[dayIndex(due)]}return {repeat,days,due};}
 function openAdd(){openSheet(`<h2>Add a task</h2>${taskForm({})}<div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="addTask()">Add task</button></div>`)}
-function addTask(){const title=document.getElementById('fTitle').value.trim();if(!title)return;const repeat=document.getElementById('fRepeat').value;let days=selectedDays();if(repeat==='Weekdays')days=[1,2,3,4,5];state.tasks.push({id:Date.now(),title,cat:document.getElementById('fCat').value,pts:+document.getElementById('fPts').value||0,done:false,lastDone:'',repeat,due:document.getElementById('fDue').value,days});closeModal();save()}
+function addTask(){const title=document.getElementById('fTitle').value.trim();if(!title)return;const s=collectSchedule();state.tasks.push({id:Date.now(),title,cat:document.getElementById('fCat').value,pts:+document.getElementById('fPts').value||0,done:false,lastDone:'',repeat:s.repeat,due:s.due,days:s.days});closeModal();save()}
 function editTask(id){const t=state.tasks.find(x=>x.id===id);if(!t)return;openSheet(`<h2>Edit task ✏️</h2>${taskForm(t,true)}<div class="actions"><button class="secondary danger" onclick="deleteTask(${id})">Delete</button><button class="primary" onclick="updateTask(${id})">Save changes</button></div>`)}
-function updateTask(id){let t=state.tasks.find(x=>x.id===id);if(!t)return;const repeat=document.getElementById('fRepeat').value;let days=selectedDays();if(repeat==='Weekdays')days=[1,2,3,4,5];t.title=document.getElementById('fTitle').value.trim()||t.title;t.cat=document.getElementById('fCat').value;t.pts=+document.getElementById('fPts').value||0;t.repeat=repeat;t.due=document.getElementById('fDue').value;t.days=days;closeModal();save()}
+function updateTask(id){let t=state.tasks.find(x=>x.id===id);if(!t)return;const s=collectSchedule();t.title=document.getElementById('fTitle').value.trim()||t.title;t.cat=document.getElementById('fCat').value;t.pts=+document.getElementById('fPts').value||0;t.repeat=s.repeat;t.due=s.due;t.days=s.days;t.lastDone='';t.done=false;closeModal();save()}
 function deleteTask(id){if(confirm('Delete this task?')){state.tasks=state.tasks.filter(x=>x.id!==id);closeModal();save()}}
-
 function toggleTask(id){let t=state.tasks.find(x=>x.id===id);if(!t)return;const done=taskDoneToday(t);if(!done){if(t.repeat&&t.repeat!=='Once')t.lastDone=todayISO();else t.done=true;state.points+=t.pts}else{if(t.repeat&&t.repeat!=='Once')t.lastDone='';else t.done=false;state.points=Math.max(0,state.points-t.pts)}save()}
 
-function openRoutine(){openSheet(`<h2>Cleaning routines 🌿</h2><div class="field"><label>Daily / weekly routines are ready to edit in the task list. Add your own below.</label><input id="rTitle" placeholder="e.g. Change sheets"></div><div class="actions"><button class="secondary" onclick="closeModal()">Close</button><button class="primary" onclick="addRoutine()">Add routine</button></div>`)}
-function addRoutine(){let x=document.getElementById('rTitle').value.trim();if(x){state.routines.push(x);closeModal();save()}}
-function openKidTask(){openSheet(`<h2>Add a kids' task</h2><div class="field"><label>Child</label><select id="kChild">${state.kids.map((k,i)=>`<option value="${i}">${esc(k.name)}</option>`).join('')}</select></div><div class="field"><label>Task</label><input id="kTask" placeholder="e.g. Put shoes away"></div><div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="addKidTask()">Add task</button></div>`)}
-function addKidTask(){let i=+document.getElementById('kChild').value,t=document.getElementById('kTask').value.trim();if(t){state.kids[i].tasks.push(t);closeModal();save()}}
-function kidDone(i,j){state.kids[i].points+=5;state.points+=5;state.kids[i].tasks.splice(j,1);save()}
+function routineForm(t={}){const days=t.days||((t.repeat==='Weekdays')?[1,2,3,4,5]:[]);return `<div class="field"><label>Cleaning task</label><input id="rTitle" value="${esc(t.title||'')}" placeholder="e.g. Change sheets"></div><div class="field"><label>Points</label><input id="rPts" type="number" value="${t.pts??0}" min="0"></div><div class="field"><label>Repeat</label><select id="fRepeat" onchange="toggleDayPicker()">${['Once','Daily','Weekdays','Weekly','Fortnightly','Monthly'].map(c=>`<option ${c===(t.repeat||'Once')?'selected':''}>${c}</option>`).join('')}</select></div><div class="field" id="dayPicker" style="display:${['Weekly','Fortnightly'].includes(t.repeat)?'block':'none'}"><label>Which day(s)?</label>${weekdayChecks(days)}</div><div class="field"><label>${t.repeat&&t.repeat!=='Once'?'Start / first occurrence':'Due date (optional)'}</label><input id="fDue" type="date" value="${t.due||''}"></div><div class="mini">Choose the exact day(s) for Weekly or Fortnightly. Fortnightly repeats every 2 weeks from the start date.</div>`}
+function openRoutine(){openSheet(`<h2>Add cleaning task 🌿</h2>${routineForm({repeat:'Weekly',days:[6]})}<div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="addRoutine()">Add task</button></div>`)}
+function editRoutine(id){const t=state.routines.find(x=>String(x.id)===String(id));if(!t)return;openSheet(`<h2>Edit cleaning task ✏️</h2>${routineForm(t)}<div class="actions"><button class="secondary danger" onclick="deleteRoutine('${id}')">Delete</button><button class="primary" onclick="updateRoutine('${id}')">Save changes</button></div>`)}
+function routineSchedule(){const repeat=document.getElementById('fRepeat').value;let days=selectedDays();let due=document.getElementById('fDue').value;if(repeat==='Weekdays')days=[1,2,3,4,5];if(['Weekly','Fortnightly'].includes(repeat)&&!days.length){due=due||todayISO();days=[dayIndex(due)]}return {repeat,days,due}}
+function addRoutine(){const title=document.getElementById('rTitle').value.trim();if(!title)return;const s=routineSchedule();state.routines.push({id:'r'+Date.now(),title,pts:+document.getElementById('rPts').value||0,repeat:s.repeat,due:s.due,days:s.days,lastDone:'',done:false});closeModal();save()}
+function updateRoutine(id){const t=state.routines.find(x=>String(x.id)===String(id));if(!t)return;const s=routineSchedule();t.title=document.getElementById('rTitle').value.trim()||t.title;t.pts=+document.getElementById('rPts').value||0;t.repeat=s.repeat;t.due=s.due;t.days=s.days;t.lastDone='';closeModal();save()}
+function deleteRoutine(id){if(confirm('Delete this cleaning task?')){state.routines=state.routines.filter(x=>String(x.id)!==String(id));closeModal();save()}}
+function toggleRoutine(id){const t=state.routines.find(x=>String(x.id)===String(id));if(!t)return;const done=taskDoneToday(t);if(!done){if(t.repeat&&t.repeat!=='Once')t.lastDone=todayISO();else t.done=true;state.points+=t.pts}else{if(t.repeat&&t.repeat!=='Once')t.lastDone='';else t.done=false;state.points=Math.max(0,state.points-t.pts)}save()}
+
+function kidTaskForm(t={}){const days=t.days||((t.repeat==='Weekdays')?[1,2,3,4,5]:[]);return `<div class="field"><label>Child</label><select id="kChild">${state.kids.map((k,i)=>`<option value="${i}">${esc(k.name)}</option>`).join('')}</select></div><div class="field"><label>Task</label><input id="kTask" value="${esc(t.title||'')}" placeholder="e.g. Put shoes away"></div><div class="field"><label>Points</label><input id="kPts" type="number" value="${t.pts??5}" min="0"></div><div class="field"><label>Repeat</label><select id="kRepeat" onchange="toggleKidDayPicker()">${['Once','Daily','Weekdays','Weekly','Fortnightly','Monthly'].map(c=>`<option ${c===(t.repeat||'Once')?'selected':''}>${c}</option>`).join('')}</select></div><div class="field" id="kDayPicker" style="display:${['Weekly','Fortnightly'].includes(t.repeat)?'block':'none'}"><label>Which day(s)?</label>${weekdayChecks(days).replaceAll('name="fDays"','name="kDays"')}</div><div class="field"><label>${t.repeat&&t.repeat!=='Once'?'Start / first occurrence':'Due date (optional)'}</label><input id="kDue" type="date" value="${t.due||''}"></div>`}
+function toggleKidDayPicker(){const r=document.getElementById('kRepeat').value;document.getElementById('kDayPicker').style.display=['Weekly','Fortnightly'].includes(r)?'block':'none'}
+function selectedKidDays(){return [...document.querySelectorAll('input[name="kDays"]:checked')].map(x=>+x.value)}
+function kidSchedule(){const repeat=document.getElementById('kRepeat').value;let days=selectedKidDays();let due=document.getElementById('kDue').value;if(repeat==='Weekdays')days=[1,2,3,4,5];if(['Weekly','Fortnightly'].includes(repeat)&&!days.length){due=due||todayISO();days=[dayIndex(due)]}return {repeat,days,due}}
+function openKidTask(){openSheet(`<h2>Add a kids' task</h2>${kidTaskForm({})}<div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="addKidTask()">Add task</button></div>`)}
+function addKidTask(){let i=+document.getElementById('kChild').value,t=document.getElementById('kTask').value.trim();if(t){const s=kidSchedule();state.kids[i].tasks.push({id:'k'+Date.now(),title:t,pts:+document.getElementById('kPts').value||0,repeat:s.repeat,due:s.due,days:s.days,lastDone:'',done:false});closeModal();save()}}
+function kidDone(i,j){const t=state.kids[i].tasks[j];if(!t)return;const done=taskDoneToday(t);if(!done){if(t.repeat&&t.repeat!=='Once')t.lastDone=todayISO();else t.done=true;state.kids[i].points+=t.pts;state.points+=t.pts}else{if(t.repeat&&t.repeat!=='Once')t.lastDone='';else t.done=false;state.kids[i].points=Math.max(0,state.kids[i].points-t.pts);state.points=Math.max(0,state.points-t.pts)}save()}
 function addKid(){openSheet(`<h2>Add a child</h2><div class="field"><label>Name</label><input id="kidName" placeholder="Child's name"></div><div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="saveKid()">Add</button></div>`)}
 function saveKid(){let n=document.getElementById('kidName').value.trim();if(n){state.kids.push({name:n,points:0,tasks:[]});closeModal();save()}}
 function editKid(i){const k=state.kids[i];openSheet(`<h2>Edit ${esc(k.name)} ✏️</h2><div class="field"><label>Child's name</label><input id="kidName" value="${esc(k.name)}"></div><div class="actions"><button class="secondary" onclick="closeModal();kidDetail(${i})">Cancel</button><button class="primary" onclick="state.kids[${i}].name=document.getElementById('kidName').value.trim()||state.kids[${i}].name;closeModal();save()">Save name</button></div>`)}
 function deleteKid(i){if(confirm(`Delete ${state.kids[i].name} and their tasks?`)){state.kids.splice(i,1);closeModal();save()}}
-function editKidTask(ki,ti){const k=state.kids[ki], old=k.tasks[ti];openSheet(`<h2>Edit kids' task ✏️</h2><div class="field"><label>Task</label><input id="ktEdit" value="${esc(old)}"></div><div class="actions"><button class="secondary danger" onclick="deleteKidTask(${ki},${ti})">Delete</button><button class="primary" onclick="k=state.kids[${ki}];k.tasks[${ti}]=document.getElementById('ktEdit').value.trim()||k.tasks[${ti}];closeModal();save()">Save</button></div>`)}
+function editKidTask(ki,ti){const k=state.kids[ki], old=k.tasks[ti];openSheet(`<h2>Edit kids' task ✏️</h2>${kidTaskForm(old)}<div class="actions"><button class="secondary danger" onclick="deleteKidTask(${ki},${ti})">Delete</button><button class="primary" onclick="updateKidTask(${ki},${ti})">Save changes</button></div>`);setTimeout(()=>{document.getElementById('kChild').value=ki},0)}
+function updateKidTask(ki,ti){const k=state.kids[ki],t=k.tasks[ti];if(!t)return;const s=kidSchedule();t.title=document.getElementById('kTask').value.trim()||t.title;t.pts=+document.getElementById('kPts').value||0;t.repeat=s.repeat;t.due=s.due;t.days=s.days;t.lastDone='';t.done=false;closeModal();save()}
 function deleteKidTask(ki,ti){if(confirm('Delete this kids’ task?')){state.kids[ki].tasks.splice(ti,1);closeModal();save()}}
 function openActivity(){openSheet(`<h2>Add activity</h2><div class="field"><label>Activity</label><input id="aTitle" placeholder="e.g. Soccer practice"></div><div class="field"><label>Day</label><input id="aDay" value="Today"></div><div class="field"><label>Time</label><input id="aTime" placeholder="4:30pm"></div><div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="saveActivity()">Add</button></div>`)}
 function saveActivity(){state.activities.push({title:document.getElementById('aTitle').value.trim()||'Activity',day:document.getElementById('aDay').value,time:document.getElementById('aTime').value});closeModal();save()}
@@ -264,7 +311,8 @@ function addShopping(){let x=document.getElementById('sItem').value.trim();if(x)
 function shopDone(i){state.shopping.splice(i,1);save()}
 function openReward(){openSheet(`<h2>Add a reward 🎁</h2><div class="field"><label>Reward</label><input id="rwTitle" placeholder="e.g. Favourite takeaway"></div><div class="field"><label>Points</label><input id="rwPts" type="number" value="100" min="1"></div><div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="saveReward()">Add reward</button></div>`)}
 function saveReward(){let t=document.getElementById('rwTitle').value.trim();if(t){state.rewards.push({title:t,pts:+document.getElementById('rwPts').value||100,icon:'🎁'});closeModal();save()}}
-function claimReward(i){let r=state.rewards[i];if(state.points<r.pts){alert(`You need ${r.pts-state.points} more points.`);return}if(confirm(`Claim "${r.title}" for ${r.pts} points?`)){state.points-=r.pts;state.rewardHistory=state.rewardHistory||[];state.rewardHistory.push({title:r.title,pts:r.pts,date:new Date().toLocaleDateString()});save()}}
+function claimReward(i){let r=state.rewards[i];if(state.points<r.pts){alert(`You need ${r.pts-state.points} more points.`);return}if(confirm(`Claim "${r.title}" for ${r.pts} points? Your points will reduce by ${r.pts}.`)){state.points-=r.pts;state.rewardHistory=state.rewardHistory||[];state.rewardHistory.push({title:r.title,pts:r.pts,date:new Date().toLocaleDateString()});save()}}
+function resetPoints(){if(confirm('Reset your points to 0? This cannot be undone.')){state.points=0;save()}}
 function editReward(i){const r=state.rewards[i];openSheet(`<h2>Edit reward ✏️</h2><div class="field"><label>Reward</label><input id="rwTitle" value="${esc(r.title)}"></div><div class="field"><label>Points</label><input id="rwPts" type="number" value="${r.pts}" min="1"></div><div class="actions"><button class="secondary danger" onclick="deleteReward(${i})">Delete</button><button class="primary" onclick="state.rewards[${i}].title=document.getElementById('rwTitle').value.trim()||state.rewards[${i}].title;state.rewards[${i}].pts=+document.getElementById('rwPts').value||state.rewards[${i}].pts;closeModal();save()">Save</button></div>`)}
 function deleteReward(i){if(confirm('Delete this reward?')){state.rewards.splice(i,1);closeModal();save()}}
 function openSettings(){openSheet(`<h2>Your space 🌿</h2><div class="field"><label>Your name</label><input id="nm" value="${esc(state.name)}"></div><div class="field"><label>Tip</label><div style="background:var(--sage2);padding:13px;border-radius:13px">Everything is saved on this device. No account or internet connection is required for your data.</div></div><div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="state.name=document.getElementById('nm').value.trim()||'My';closeModal();save()">Save</button></div>`)}
