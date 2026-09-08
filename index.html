@@ -31,7 +31,7 @@ h1{font:700 30px Georgia,serif;margin:8px 0 5px}.sub{color:var(--muted);margin-b
 .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
 .card{padding:16px;border-radius:20px;box-shadow:var(--shadow);min-height:105px;border:1px solid rgba(120,100,80,.08)}
 .card h3{margin:0 0 8px;font-size:15px}.card p{margin:0;color:#6d635a;font-size:13px}
-.work{background:var(--lav)}.home{background:var(--sage2)}.kids{background:var(--rose)}.activities{background:var(--blue)}.shopping{background:var(--honey)}
+.work{background:var(--lav)}.home{background:var(--sage2)}.garden{background:#e4dfc8}.kids{background:var(--rose)}.activities{background:var(--blue)}.shopping{background:var(--honey)}
 .section{margin-top:23px}.section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.section-head h2{font:700 19px Georgia,serif;margin:0}
 .list{background:var(--paper);border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:var(--shadow)}
 .task{display:flex;align-items:center;gap:11px;padding:13px 15px;border-bottom:1px solid var(--line)}.task:last-child{border-bottom:0}
@@ -146,6 +146,7 @@ function home(){
  <div class="grid">
   ${tile('💻','WORK','work',count('Work'),'tasks')}
   ${tile('🌿','HOME','home',count('Home'),'tasks')}
+  ${tile('🌱','GARDEN','garden',count('Garden'),'tasks')}
   ${tile('🌸','KIDS','kids',state.kids.length+' kids','kids')}
   ${tile('⚽','ACTIVITIES','activities',state.activities.length+' upcoming','calendar')}
   ${tile('🛒','SHOPPING','shopping',state.shopping.length+' items','more')}
@@ -209,7 +210,7 @@ function taskHTML(t,kind='main'){
 function tasksPage(){
  const scheduled=state.tasks.filter(t=>taskScheduled(t));
  return `<section class="screen"><h1>Tasks</h1><div class="sub">Everything you need to get done, in one place.</div>
- <div class="tabs"><button class="tab active" onclick="filterTasks('All',this)">All</button><button class="tab" onclick="filterTasks('Work',this)">Work</button><button class="tab" onclick="filterTasks('Home',this)">Home</button><button class="tab" onclick="filterTasks('Kids',this)">Kids</button></div>
+ <div class="tabs"><button class="tab active" onclick="filterTasks('All',this)">All</button><button class="tab" onclick="filterTasks('Work',this)">Work</button><button class="tab" onclick="filterTasks('Home',this)">Home</button><button class="tab" onclick="filterTasks('Garden',this)">Garden</button><button class="tab" onclick="filterTasks('Kids',this)">Kids</button></div>
  <div class="list" id="taskList">${scheduled.map(taskHTML).join('')||'<div class="empty">Nothing scheduled for today 🌿</div>'}<button class="addrow" onclick="openAdd()">＋ Add task</button></div>
  <div class="section"><div class="section-head"><h2>Cleaning routines 🌿</h2><button class="pill" onclick="openRoutine()">＋ Add</button></div><div class="list">${state.routines.filter(t=>taskScheduled(t)).map(t=>taskHTML(t,'routine')).join('')||'<div class="empty">Nothing scheduled for cleaning today.</div>'}</div><button class="addrow" onclick="openRoutine()">＋ Add cleaning task</button></div>
  </section>`;
@@ -264,7 +265,7 @@ function taskForm(t={},editing=false){
  const days=t.days||((t.repeat==='Weekdays')?[1,2,3,4,5]:[]);
  const showDays=['Weekly','Fortnightly'].includes(t.repeat);
  return `<div class="field"><label>Task name</label><input id="fTitle" value="${esc(t.title||'')}" placeholder="What needs doing?"></div>
- <div class="field"><label>Area</label><select id="fCat">${['Home','Work','Kids','Personal'].map(c=>`<option ${c===(t.cat||'Home')?'selected':''}>${c}</option>`).join('')}</select></div>
+ <div class="field"><label>Area</label><select id="fCat">${['Home','Garden','Work','Kids','Personal'].map(c=>`<option ${c===(t.cat||'Home')?'selected':''}>${c}</option>`).join('')}</select></div>
  <div class="field"><label>Points</label><input id="fPts" type="number" value="${t.pts??0}" min="0"></div>
  <div class="field"><label>Repeat</label><select id="fRepeat" onchange="toggleDayPicker()">${['Once','Daily','Weekdays','Weekly','Fortnightly','Monthly'].map(c=>`<option ${c===(t.repeat||'Once')?'selected':''}>${c}</option>`).join('')}</select></div>
  <div class="field" id="dayPicker" style="display:${showDays?'block':'none'}"><label>Which day(s)?</label>${weekdayChecks(days)}</div>
