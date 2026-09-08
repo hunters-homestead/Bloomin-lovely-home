@@ -116,12 +116,17 @@ state.activities=state.activities.map((a,i)=>Object.assign({id:'a'+i+'-'+Date.no
 state.routines=Array.isArray(state.routines)?state.routines:[];
 // Convert older kids' task strings into full recurring task objects.
 state.kids=(state.kids||[]).map((k,ki)=>{
-  k.points=0;
+  k.points=Number.isFinite(+k.points)?+k.points:0;
   k.tasks=(k.tasks||[]).map((t,ti)=>typeof t==='string'?{id:'k'+ki+'-'+ti+'-'+Date.now(),title:t,pts:5,repeat:'Once',due:'',days:[],lastDone:'',done:false,paused:false,start:'',end:''}:Object.assign({id:'k'+ki+'-'+ti+'-'+Date.now(),pts:5,repeat:'Once',due:'',days:[],lastDone:'',done:false,paused:false,start:'',end:''},t));
   return k;
 });
 // Convert older cleaning routines into full recurring tasks.
 state.routines=state.routines.map((r,i)=>typeof r==='string'?{id:'r'+i,title:r,pts:[5,5,5,10,15,10][i]||5,repeat:i<3?'Daily':'Weekly',due:'',days:i<3?[1,2,3,4,5,6,0]:[6],lastDone:'',done:false,paused:false,start:'',end:''}:Object.assign({id:'r'+i+'-'+Date.now(),pts:5,repeat:'Once',due:'',days:[],lastDone:'',done:false,paused:false,start:'',end:''},r));
+// v10 migration: make every existing task safely editable, including older imported tasks.
+state.tasks.forEach((t,i)=>{if(t.id==null||t.id==='')t.id='t'+i+'-'+Date.now()});
+state.routines.forEach((t,i)=>{if(t.id==null||t.id==='')t.id='r'+i+'-'+Date.now()});
+state.kids.forEach((k,ki)=>k.tasks.forEach((t,ti)=>{if(t.id==null||t.id==='')t.id='k'+ki+'-'+ti+'-'+Date.now()}));
+
 // v5 is still setup mode: wipe all current point balances and reward history once.
 if(!state.__v5SetupReset){
   state.points=0;
@@ -133,6 +138,53 @@ if(!state.__v5SetupReset){
 let page='home';
 let taskFilter='All';
 function save(){localStorage.setItem(key,JSON.stringify(state));render()}
+function exportData(){
+  try{
+    const backup={app:'Bloomin Lovely Home',version:11,exportedAt:new Date().toISOString(),data:state};
+    const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download='Bloomin-Lovely-Home-backup-'+new Date().toISOString().slice(0,10)+'.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }catch(e){ alert('Sorry, the backup could not be created. Please try again.'); }
+}
+function importData(){
+  const input=document.createElement('input');
+  input.type='file'; input.accept='.json,application/json';
+  input.onchange=()=>{
+    const file=input.files&&input.files[0]; if(!file)return;
+    const reader=new FileReader();
+    reader.onload=()=>{
+      try{
+        const parsed=JSON.parse(reader.result);
+        const incoming=parsed && parsed.data ? parsed.data : parsed;
+        if(!incoming || !Array.isArray(incoming.tasks) || !Array.isArray(incoming.kids)){
+          throw new Error('Invalid backup');
+        }
+        if(!confirm('Import this backup? This will replace the current app data with the backup.')) return;
+        state=incoming;
+        state.tasks=Array.isArray(state.tasks)?state.tasks:[];
+        state.kids=Array.isArray(state.kids)?state.kids:[];
+        state.rewards=Array.isArray(state.rewards)?state.rewards:[];
+        state.rewardHistory=Array.isArray(state.rewardHistory)?state.rewardHistory:[];
+        state.activities=Array.isArray(state.activities)?state.activities:[];
+        state.routines=Array.isArray(state.routines)?state.routines:[];
+        state.tasks.forEach((t,i)=>{if(t.id==null||t.id==='')t.id='t'+i+'-'+Date.now()});
+        state.kids.forEach((k,ki)=>{
+          k.tasks=Array.isArray(k.tasks)?k.tasks:[];
+          k.tasks.forEach((t,ti)=>{if(typeof t==='string')k.tasks[ti]={id:'k'+ki+'-'+ti+'-'+Date.now(),title:t,pts:5,repeat:'Once',due:'',days:[],lastDone:'',done:false,paused:false,start:'',end:''}; else if(t.id==null||t.id==='')t.id='k'+ki+'-'+ti+'-'+Date.now()});
+        });
+        localStorage.setItem(key,JSON.stringify(state));
+        render();
+        alert('Backup restored successfully.');
+      }catch(e){alert('That file does not appear to be a valid Bloomin Lovely Home backup.');}
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
 function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 function render(){
  document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
@@ -173,7 +225,8 @@ function todayArea(cat,icon,cls){
    return `<div class="task"><span>${icon}</span><div class="tasktext"><b>${esc(t.title)}</b><div class="taskmeta">${esc(repeatText(t))}</div></div><span class="pts">${t.pts||0} pts</span></div>`;
  }).join('');
  const more=items.length>4?`<div class="mini" style="padding:8px 4px">+ ${items.length-4} more</div>`:'';
- return `<div class="today-sub ${cls}"><div class="section-head"><h3 style="margin:0">${icon} ${cat}</h3><button class="pill" onclick="showPage('tasks','${cat==='Cleaning'?'All':cat}')">View</button></div><div class="list">${rows}${more}</div></div>`;
+ const viewAction=cat==='Kids'?"showPage('kids')":cat==='Cleaning'?"showPage('tasks','All')":`showPage('tasks','${cat}')`;
+ return `<div class="today-sub ${cls}"><div class="section-head"><h3 style="margin:0">${icon} ${cat}</h3><button class="pill" onclick="${viewAction}">View</button></div><div class="list">${rows}${more}</div></div>`;
 }
 function tile(icon,title,cls,detail,p,filter='All'){return `<button class="card ${cls}" onclick="showPage('${p}','${filter}')"><div style="font-size:23px">${icon}</div><h3>${title}</h3><p>${detail}</p></button>`}
 function count(c){return state.tasks.filter(t=>t.cat===c&&!t.done).length+' tasks'}
@@ -225,20 +278,24 @@ function allTaskCollections(){
 function taskHTML(t,kind='main'){
  const meta=[t.cat,repeatText(t),t.paused?'Paused':(t.due?('From '+t.due):''),t.start||t.end?('Season '+(t.start||'now')+' → '+(t.end||'ongoing')):''].filter(Boolean).join(' · ');
  const done=taskDoneToday(t);
- const edit=kind==='main'?`editTask(${t.id})`:kind==='routine'?`editRoutine(${t.id})`:'';
- const check=kind==='main'?`toggleTask(${t.id})`:kind==='routine'?`toggleRoutine(${t.id})`:'';
+ const edit=kind==='main'?`editTask(${JSON.stringify(String(t.id))})`:kind==='routine'?`editRoutine(${JSON.stringify(String(t.id))})`:'';
+ const check=kind==='main'?`toggleTask(${JSON.stringify(String(t.id))})`:kind==='routine'?`toggleRoutine(${JSON.stringify(String(t.id))})`:'';
  return `<div class="task"><button class="check ${done?'done':''}" onclick="${check}"></button><div class="tasktext ${done?'done':''}" onclick="${edit}"><b>${esc(t.title)}</b><div class="taskmeta">${esc(meta)}</div></div><span class="pts">${t.pts||0} pts</span><button class="editbtn" onclick="${edit}">Edit</button></div>`
 }
 
 function tasksPage(){
- const scheduled=state.tasks.filter(t=>taskScheduled(t)&&(taskFilter==='All'||t.cat===taskFilter));
- return `<section class="screen"><h1>Tasks</h1><div class="sub">Everything you need to get done, in one place.</div>
+ const isAll=taskFilter==='All';
+ const scheduled=state.tasks.filter(t=>taskScheduled(t)&&(isAll||t.cat===taskFilter));
+ const paused=allTaskCollections().filter(x=>x.task.paused && (isAll || (x.kind==='main' && x.task.cat===taskFilter)));
+ const heading=isAll?'Tasks':`${esc(taskFilter)} tasks`;
+ const cleaningSection=isAll?`<div class="section"><div class="section-head"><h2>Cleaning routines 🌿</h2><button class="pill" onclick="openRoutine()">＋ Add</button></div><div class="list">${state.routines.filter(t=>taskScheduled(t)).map(t=>taskHTML(t,'routine')).join('')||'<div class="empty">Nothing scheduled for cleaning today.</div>'}</div><button class="addrow" onclick="openRoutine()">＋ Add cleaning task</button></div>`:'';
+ const pausedSection=paused.length?`<div class="section"><div class="section-head"><h2>Paused / seasonal tasks ⏸️</h2></div><div class="list">${paused.map(x=>`<div class="task"><span>⏸️</span><div class="tasktext"><b>${esc(x.task.title)}</b><div class="taskmeta">${esc(x.task.cat||'Kids')} · ${esc(repeatText(x.task))}</div></div><button class="editbtn" onclick="${x.kind==='main'?`editTask(${JSON.stringify(String(x.task.id))})`:x.kind==='routine'?`editRoutine(${JSON.stringify(String(x.task.id))})`:`editKidTask(${x.ki},${x.ti})`}">Edit</button></div>`).join('')}</div></div>`:'';
+ return `<section class="screen"><h1>${heading}</h1><div class="sub">Everything you need to get done, in one place.</div>
  <div class="tabs"><button class="tab ${taskFilter==='All'?'active':''}" onclick="filterTasks('All',this)">All</button><button class="tab ${taskFilter==='Work'?'active':''}" onclick="filterTasks('Work',this)">Work</button><button class="tab ${taskFilter==='Home'?'active':''}" onclick="filterTasks('Home',this)">Home</button><button class="tab ${taskFilter==='Garden'?'active':''}" onclick="filterTasks('Garden',this)">Garden</button><button class="tab ${taskFilter==='Kids'?'active':''}" onclick="filterTasks('Kids',this)">Kids</button></div>
  <div class="list" id="taskList">${scheduled.map(taskHTML).join('')||'<div class="empty">Nothing scheduled for today 🌿</div>'}<button class="addrow" onclick="openAdd()">＋ Add task</button></div>
- <div class="section"><div class="section-head"><h2>Cleaning routines 🌿</h2><button class="pill" onclick="openRoutine()">＋ Add</button></div><div class="list">${state.routines.filter(t=>taskScheduled(t)).map(t=>taskHTML(t,'routine')).join('')||'<div class="empty">Nothing scheduled for cleaning today.</div>'}</div><button class="addrow" onclick="openRoutine()">＋ Add cleaning task</button></div><div class="section"><div class="section-head"><h2>Paused / seasonal tasks ⏸️</h2></div><div class="list">${allTaskCollections().filter(x=>x.task.paused).map(x=>`<div class="task"><span>⏸️</span><div class="tasktext"><b>${esc(x.task.title)}</b><div class="taskmeta">${esc(x.task.cat||'Kids')} · ${esc(repeatText(x.task))}</div></div><button class="editbtn" onclick="${x.kind==='main'?`toggleTaskPause(${x.task.id})`:x.kind==='routine'?`toggleRoutinePause(${x.task.id})`:`state.kids[${x.ki}].tasks[${x.ti}].paused=false;save()`}">Resume</button></div>`).join('')||'<div class="empty">No paused tasks.</div>'}</div></div>
+ ${cleaningSection}${pausedSection}
  </section>`;
 }
-
 function filterTasks(cat,btn){
  taskFilter=cat;
  document.querySelectorAll('.tabs .tab').forEach(b=>b.classList.remove('active')); if(btn)btn.classList.add('active');
@@ -331,7 +388,7 @@ function toggleDayPicker(){const r=document.getElementById('fRepeat').value;docu
 function collectSchedule(){const repeat=document.getElementById('fRepeat').value;let days=selectedDays();let due=document.getElementById('fDue').value;if(repeat==='Weekdays')days=[1,2,3,4,5];if(['Weekly','Fortnightly'].includes(repeat)&&!days.length){due=due||todayISO();days=[dayIndex(due)]}return {repeat,days,due,paused:document.getElementById('fPaused')?.value==='true',start:document.getElementById('fStart')?.value||'',end:document.getElementById('fEnd')?.value||''};}
 function openAdd(){openSheet(`<h2>Add a task</h2>${taskForm({})}<div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="addTask()">Add task</button></div>`)}
 function addTask(){const title=document.getElementById('fTitle').value.trim();if(!title)return;const s=collectSchedule();state.tasks.push({id:Date.now(),title,cat:document.getElementById('fCat').value,pts:+document.getElementById('fPts').value||0,done:false,lastDone:'',repeat:s.repeat,due:s.due,days:s.days,paused:s.paused,start:s.start,end:s.end});closeModal();save()}
-function editTask(id){const t=state.tasks.find(x=>x.id===id);if(!t)return;openSheet(`<h2>Edit task ✏️</h2>${taskForm(t,true)}<div class="actions"><button class="secondary danger" onclick="deleteTask(${id})">Delete</button><button class="primary" onclick="updateTask(${id})">Save changes</button></div>`)}
+function editTask(id){const t=state.tasks.find(x=>x.id===id);if(!t)return;openSheet(`<h2>Edit task ✏️</h2>${taskForm(t,true)}<div class="actions"><button class="secondary danger" onclick="deleteTask(${JSON.stringify(String(id))})">Delete</button><button class="primary" onclick="updateTask(${id})">Save changes</button></div>`)}
 function updateTask(id){let t=state.tasks.find(x=>x.id===id);if(!t)return;const s=collectSchedule();t.title=document.getElementById('fTitle').value.trim()||t.title;t.cat=document.getElementById('fCat').value;t.pts=+document.getElementById('fPts').value||0;t.repeat=s.repeat;t.due=s.due;t.days=s.days;t.paused=s.paused;t.start=s.start;t.end=s.end;t.lastDone='';t.done=false;closeModal();save()}
 function toggleTaskPause(id){const t=state.tasks.find(x=>x.id===id);if(t){t.paused=!t.paused;save()}}
 function deleteTask(id){if(confirm('Delete this task?')){state.tasks=state.tasks.filter(x=>x.id!==id);closeModal();save()}}
