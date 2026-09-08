@@ -108,7 +108,7 @@ let state=JSON.parse(localStorage.getItem(key)||'null')||{
 };
 // v5 data upgrade: every task type uses the same recurring-task system.
 state.tasks=Array.isArray(state.tasks)?state.tasks:[];
-state.tasks.forEach(t=>{t.repeat=t.repeat||'Once';t.due=t.due||'';t.days=Array.isArray(t.days)?t.days:[];t.lastDone=t.lastDone||'';t.pts=Number.isFinite(+t.pts)?+t.pts:0;t.paused=!!t.paused;t.start=t.start||'';t.end=t.end||''});
+state.tasks.forEach((t,i)=>{t.id=t.id!=null?t.id:'legacy-'+i+'-'+Date.now();t.title=t.title||'Task';t.cat=t.cat||'Home';t.repeat=t.repeat||'Once';t.due=t.due||'';t.days=Array.isArray(t.days)?t.days:[];t.lastDone=t.lastDone||'';t.pts=Number.isFinite(+t.pts)?+t.pts:0;t.paused=!!t.paused;t.start=t.start||'';t.end=t.end||''});
 state.rewardHistory=state.rewardHistory||[];
 state.activities=Array.isArray(state.activities)?state.activities:[];
 // Activity upgrade: weekly schedules with optional active date range and pause control.
@@ -117,11 +117,11 @@ state.routines=Array.isArray(state.routines)?state.routines:[];
 // Convert older kids' task strings into full recurring task objects.
 state.kids=(state.kids||[]).map((k,ki)=>{
   k.points=0;
-  k.tasks=(k.tasks||[]).map((t,ti)=>typeof t==='string'?{id:'k'+ki+'-'+ti+'-'+Date.now(),title:t,pts:5,repeat:'Once',due:'',days:[],lastDone:'',done:false,paused:false,start:'',end:''}:Object.assign({pts:5,repeat:'Once',due:'',days:[],lastDone:'',done:false,paused:false,start:'',end:''},t));
+  k.tasks=(k.tasks||[]).map((t,ti)=>typeof t==='string'?{id:'k'+ki+'-'+ti+'-'+Date.now(),title:t,pts:5,repeat:'Once',due:'',days:[],lastDone:'',done:false,paused:false,start:'',end:''}:Object.assign({id:'k'+ki+'-'+ti+'-'+Date.now(),pts:5,repeat:'Once',due:'',days:[],lastDone:'',done:false,paused:false,start:'',end:''},t));
   return k;
 });
 // Convert older cleaning routines into full recurring tasks.
-state.routines=state.routines.map((r,i)=>typeof r==='string'?{id:'r'+i,title:r,pts:[5,5,5,10,15,10][i]||5,repeat:i<3?'Daily':'Weekly',due:'',days:i<3?[1,2,3,4,5,6,0]:[6],lastDone:'',done:false,paused:false,start:'',end:''}:Object.assign({paused:false,start:'',end:''},r));
+state.routines=state.routines.map((r,i)=>typeof r==='string'?{id:'r'+i,title:r,pts:[5,5,5,10,15,10][i]||5,repeat:i<3?'Daily':'Weekly',due:'',days:i<3?[1,2,3,4,5,6,0]:[6],lastDone:'',done:false,paused:false,start:'',end:''}:Object.assign({id:'r'+i+'-'+Date.now(),pts:5,repeat:'Once',due:'',days:[],lastDone:'',done:false,paused:false,start:'',end:''},r));
 // v5 is still setup mode: wipe all current point balances and reward history once.
 if(!state.__v5SetupReset){
   state.points=0;
@@ -131,6 +131,7 @@ if(!state.__v5SetupReset){
   localStorage.setItem(key,JSON.stringify(state));
 }
 let page='home';
+let taskFilter='All';
 function save(){localStorage.setItem(key,JSON.stringify(state));render()}
 function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 function render(){
@@ -147,18 +148,34 @@ function home(){
  return `<section class="screen"><h1>Good morning, ${esc(state.name)} ☀️</h1><div class="sub">Let's make today feel a little easier.</div>
  <div class="points-card"><div><div class="sub" style="margin:0">⭐ Your points</div><b>${state.points}</b> <span class="sub">points</span></div><span class="pill">${nextReward()} pts to next reward</span></div>
  <div class="grid">
-  ${tile('💻','WORK','work',count('Work'),'tasks')}
-  ${tile('🌿','HOME','home',count('Home'),'tasks')}
-  ${tile('🌱','GARDEN','garden',count('Garden'),'tasks')}
+  ${tile('💻','WORK','work',count('Work'),'tasks','Work')}
+  ${tile('🌿','HOME','home',count('Home'),'tasks','Home')}
+  ${tile('🌱','GARDEN','garden',count('Garden'),'tasks','Garden')}
   ${tile('🌸','KIDS','kids',state.kids.length+' kids','kids')}
   ${tile('⚽','ACTIVITIES','activities',state.activities.length+' upcoming','calendar')}
   ${tile('🛒','SHOPPING','shopping',state.shopping.length+' items','more')}
  </div>
- <div class="section"><div class="section-head"><h2>Today</h2><button class="pill" onclick="showPage('tasks')">View all</button></div><div class="list">${state.tasks.filter(t=>taskScheduled(t)&&!taskDoneToday(t)).slice(0,5).map(taskHTML).join('')||'<div class="empty">Nothing urgent. Enjoy the calm 🌿</div>'}</div></div>
+ <div class="section"><div class="section-head"><h2>Today</h2><button class="pill" onclick="showPage('tasks','All')">View all</button></div>
+  ${todayArea('Work','💻','work')}
+  ${todayArea('Home','🌿','home')}
+  ${todayArea('Garden','🌱','garden')}
+  ${todayArea('Kids','🌸','kids')}
+  ${todayArea('Cleaning','🧹','cleaning')}
+ </div>
  <div class="section"><div class="section-head"><h2>Coming up</h2><button class="pill" onclick="showPage('calendar')">See calendar</button></div><div class="list">${state.activities.filter(a=>activityScheduled(a)).slice(0,3).map(a=>`<div class="task"><span>⚽</span><div class="tasktext"><b>${esc(a.title)}</b><div class="taskmeta">Every ${activityDayName(a.weekDay)} · ${esc(a.time||'No time')}</div></div></div>`).join('')||'<div class="empty">No active activities today.</div>'}</div></div>
  </section>`;
 }
-function tile(icon,title,cls,detail,p){return `<button class="card ${cls}" onclick="showPage('${p}')"><div style="font-size:23px">${icon}</div><h3>${title}</h3><p>${detail}</p></button>`}
+function todayArea(cat,icon,cls){
+ const items=cat==='Cleaning'?state.routines.filter(t=>taskScheduled(t)&&!taskDoneToday(t)):cat==='Kids'?state.kids.flatMap((k,ki)=>k.tasks.filter(t=>taskScheduled(t)&&!taskDoneToday(t)).map(t=>Object.assign({},t,{cat:'Kids',_kid:k.name,_ki:ki}))):state.tasks.filter(t=>t.cat===cat&&taskScheduled(t)&&!taskDoneToday(t));
+ if(!items.length)return '';
+ const rows=items.slice(0,4).map(t=>{
+   if(cat==='Kids') return `<div class="task"><span>🌸</span><div class="tasktext"><b>${esc(t.title)}</b><div class="taskmeta">${esc(t._kid)} · ${esc(repeatText(t))}</div></div><span class="pts">${t.pts||0} pts</span></div>`;
+   return `<div class="task"><span>${icon}</span><div class="tasktext"><b>${esc(t.title)}</b><div class="taskmeta">${esc(repeatText(t))}</div></div><span class="pts">${t.pts||0} pts</span></div>`;
+ }).join('');
+ const more=items.length>4?`<div class="mini" style="padding:8px 4px">+ ${items.length-4} more</div>`:'';
+ return `<div class="today-sub ${cls}"><div class="section-head"><h3 style="margin:0">${icon} ${cat}</h3><button class="pill" onclick="showPage('tasks','${cat==='Cleaning'?'All':cat}')">View</button></div><div class="list">${rows}${more}</div></div>`;
+}
+function tile(icon,title,cls,detail,p,filter='All'){return `<button class="card ${cls}" onclick="showPage('${p}','${filter}')"><div style="font-size:23px">${icon}</div><h3>${title}</h3><p>${detail}</p></button>`}
 function count(c){return state.tasks.filter(t=>t.cat===c&&!t.done).length+' tasks'}
 function todayISO(){return new Date().toISOString().slice(0,10)}
 function dateObj(iso){const d=new Date(iso+'T12:00:00');return isNaN(d)?new Date():d}
@@ -214,15 +231,16 @@ function taskHTML(t,kind='main'){
 }
 
 function tasksPage(){
- const scheduled=state.tasks.filter(t=>taskScheduled(t));
+ const scheduled=state.tasks.filter(t=>taskScheduled(t)&&(taskFilter==='All'||t.cat===taskFilter));
  return `<section class="screen"><h1>Tasks</h1><div class="sub">Everything you need to get done, in one place.</div>
- <div class="tabs"><button class="tab active" onclick="filterTasks('All',this)">All</button><button class="tab" onclick="filterTasks('Work',this)">Work</button><button class="tab" onclick="filterTasks('Home',this)">Home</button><button class="tab" onclick="filterTasks('Garden',this)">Garden</button><button class="tab" onclick="filterTasks('Kids',this)">Kids</button></div>
+ <div class="tabs"><button class="tab ${taskFilter==='All'?'active':''}" onclick="filterTasks('All',this)">All</button><button class="tab ${taskFilter==='Work'?'active':''}" onclick="filterTasks('Work',this)">Work</button><button class="tab ${taskFilter==='Home'?'active':''}" onclick="filterTasks('Home',this)">Home</button><button class="tab ${taskFilter==='Garden'?'active':''}" onclick="filterTasks('Garden',this)">Garden</button><button class="tab ${taskFilter==='Kids'?'active':''}" onclick="filterTasks('Kids',this)">Kids</button></div>
  <div class="list" id="taskList">${scheduled.map(taskHTML).join('')||'<div class="empty">Nothing scheduled for today 🌿</div>'}<button class="addrow" onclick="openAdd()">＋ Add task</button></div>
  <div class="section"><div class="section-head"><h2>Cleaning routines 🌿</h2><button class="pill" onclick="openRoutine()">＋ Add</button></div><div class="list">${state.routines.filter(t=>taskScheduled(t)).map(t=>taskHTML(t,'routine')).join('')||'<div class="empty">Nothing scheduled for cleaning today.</div>'}</div><button class="addrow" onclick="openRoutine()">＋ Add cleaning task</button></div><div class="section"><div class="section-head"><h2>Paused / seasonal tasks ⏸️</h2></div><div class="list">${allTaskCollections().filter(x=>x.task.paused).map(x=>`<div class="task"><span>⏸️</span><div class="tasktext"><b>${esc(x.task.title)}</b><div class="taskmeta">${esc(x.task.cat||'Kids')} · ${esc(repeatText(x.task))}</div></div><button class="editbtn" onclick="${x.kind==='main'?`toggleTaskPause(${x.task.id})`:x.kind==='routine'?`toggleRoutinePause(${x.task.id})`:`state.kids[${x.ki}].tasks[${x.ti}].paused=false;save()`}">Resume</button></div>`).join('')||'<div class="empty">No paused tasks.</div>'}</div></div>
  </section>`;
 }
 
 function filterTasks(cat,btn){
+ taskFilter=cat;
  document.querySelectorAll('.tabs .tab').forEach(b=>b.classList.remove('active')); if(btn)btn.classList.add('active');
  const list=state.tasks.filter(t=>taskScheduled(t)&&(cat==='All'||t.cat===cat));
  document.getElementById('taskList').innerHTML=(list.map(taskHTML).join('')||'<div class="empty">Nothing scheduled here today 🌿</div>')+'<button class="addrow" onclick="openAdd()">＋ Add task</button>';
@@ -291,7 +309,7 @@ function morePage(){
  </section>`;
 }
 function nextReward(){let n=state.rewards.map(r=>r.pts).filter(p=>p>state.points).sort((a,b)=>a-b)[0];return n? n-state.points:0}
-function showPage(p){page=p;render();window.scrollTo(0,0)}
+function showPage(p,filter='All'){page=p;if(p==='tasks')taskFilter=filter||'All';render();window.scrollTo(0,0)}
 function openSheet(body){document.getElementById('sheet').innerHTML=body;document.getElementById('modal').classList.add('show')}
 function closeModal(){document.getElementById('modal').classList.remove('show')}
 document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()})
