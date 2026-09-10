@@ -75,8 +75,9 @@ h1{font:700 30px Georgia,serif;margin:8px 0 5px}.sub{color:var(--muted);margin-b
 <div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
 
 <script>
-const key='blh-v1';
-let state=JSON.parse(localStorage.getItem(key)||'null')||{
+const key='blh-v13';
+const legacyKey='blh-v1';
+let state=JSON.parse(localStorage.getItem(key)||localStorage.getItem(legacyKey)||'null')||{
  name:'My', points:0,
  tasks:[
   {id:1,title:'Reply to emails',cat:'Work',pts:5,done:false,repeat:'Once',due:''},
@@ -126,25 +127,22 @@ state.routines=state.routines.map((r,i)=>typeof r==='string'?{id:'r'+i,title:r,p
 state.tasks.forEach((t,i)=>{if(t.id==null||t.id==='')t.id='t'+i+'-'+Date.now()});
 state.routines.forEach((t,i)=>{if(t.id==null||t.id==='')t.id='r'+i+'-'+Date.now()});
 state.kids.forEach((k,ki)=>k.tasks.forEach((t,ti)=>{if(t.id==null||t.id==='')t.id='k'+ki+'-'+ti+'-'+Date.now()}));
+state.points=Number.isFinite(+state.points)?+state.points:0;
+state.name=state.name||'My';
+state.shopping=Array.isArray(state.shopping)?state.shopping:[];
+state.rewards=Array.isArray(state.rewards)?state.rewards:[];
 
-// v5 is still setup mode: wipe all current point balances and reward history once.
-if(!state.__v5SetupReset){
-  state.points=0;
-  state.kids.forEach(k=>k.points=0);
-  state.rewardHistory=[];
-  state.__v5SetupReset=true;
-  localStorage.setItem(key,JSON.stringify(state));
-}
-// v12: make all task IDs comparable as strings so legacy tasks remain editable/deletable.
-state.tasks.forEach((t,i)=>{if(t.id==null||t.id==='')t.id='task-'+Date.now()+'-'+i;});
-state.routines.forEach((t,i)=>{if(t.id==null||t.id==='')t.id='routine-'+Date.now()+'-'+i;});
-state.kids.forEach((k,ki)=>k.tasks.forEach((t,ti)=>{if(t.id==null||t.id==='')t.id='kidtask-'+ki+'-'+ti+'-'+Date.now();}));
+// v13: never reset existing points, tasks, rewards or history during upgrades.
+state.tasks.forEach(t=>{t.id=String(t.id);});
+state.routines.forEach(t=>{t.id=String(t.id);});
+state.kids.forEach(k=>k.tasks.forEach(t=>{t.id=String(t.id);}));
+localStorage.setItem(key,JSON.stringify(state));
 let page='home';
 let taskFilter='All';
 function save(){localStorage.setItem(key,JSON.stringify(state));render()}
 function exportData(){
   try{
-    const backup={app:'Bloomin Lovely Home',version:11,exportedAt:new Date().toISOString(),data:state};
+    const backup={app:'Bloomin Lovely Home',version:13,exportedAt:new Date().toISOString(),data:state};
     const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
@@ -364,13 +362,13 @@ function morePage(){
  return `<section class="screen"><h1>More 🌿</h1><div class="sub">The bits that make your life yours.</div>
  <div class="section"><div class="section-head"><h2>🛒 Shopping</h2><button class="pill" onclick="openShopping()">Edit</button></div><div class="list">${state.shopping.map((x,i)=>`<div class="task"><button class="check" onclick="shopDone(${i})"></button><div class="tasktext"><b>${esc(x)}</b></div></div>`).join('')}<button class="addrow" onclick="openShopping()">＋ Add item</button></div></div>
  <div class="section"><div class="section-head"><h2>🎁 Rewards</h2><button class="pill" onclick="openReward()">＋ Add</button></div><div class="list">${state.rewards.map((r,i)=>`<div class="reward"><span>${r.icon} &nbsp; <b>${esc(r.title)}</b><br><small>${r.pts} points</small></span><span style="display:flex;gap:6px"><button class="editbtn" onclick="editReward(${i})">Edit</button><button class="pill" onclick="claimReward(${i})">Claim · ${r.pts}</button></span></div>`).join('')}</div></div>
- <div class="section"><div class="section-head"><h2>⭐ Points</h2></div><div class="list"><button class="addrow" onclick="resetPoints()">↺ Reset my points to 0</button><div class="mini" style="padding:10px 15px">Claiming a reward automatically deducts its point cost. Use reset if you want to start a fresh points round.</div></div></div>
+ <div class="section"><div class="section-head"><h2>⭐ Points</h2></div><div class="list"><button class="addrow" onclick="resetPoints()">↺ Reset my points to 0</button><div class="mini" style="padding:10px 15px">App data is stored on this device. Export a backup regularly. Claiming a reward automatically deducts its point cost. Use reset if you want to start a fresh points round.</div></div></div>
  <div class="section"><div class="section-head"><h2>🏆 Reward history</h2></div><div class="list">${(state.rewardHistory||[]).slice().reverse().slice(0,8).map(h=>`<div class="reward"><span>✓ &nbsp; ${esc(h.title)}<br><small>${esc(h.date)}</small></span><span class="pts">-${h.pts} pts</span></div>`).join('')||'<div class="empty">No rewards claimed yet.</div>'}</div></div>
  <div class="section"><div class="section-head"><h2>💾 Backup</h2></div><div class="list"><button class="addrow" onclick="exportData()">↓ Export my data</button><button class="addrow" onclick="importData()">↑ Import a backup</button></div></div>
  </section>`;
 }
 function nextReward(){let n=state.rewards.map(r=>r.pts).filter(p=>p>state.points).sort((a,b)=>a-b)[0];return n? n-state.points:0}
-function showPage(p,filter='All'){page=p;if(p==='tasks')taskFilter=filter||'All';render();window.scrollTo(0,0)}
+function showPage(p,filter='All'){page=p;if(p==='tasks')taskFilter=filter||'All';else if(p!=='tasks')taskFilter='All';render();window.scrollTo(0,0)}
 function openSheet(body){document.getElementById('sheet').innerHTML=body;document.getElementById('modal').classList.add('show')}
 function closeModal(){document.getElementById('modal').classList.remove('show')}
 document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()})
@@ -392,11 +390,12 @@ function toggleDayPicker(){const r=document.getElementById('fRepeat').value;docu
 function collectSchedule(){const repeat=document.getElementById('fRepeat').value;let days=selectedDays();let due=document.getElementById('fDue').value;if(repeat==='Weekdays')days=[1,2,3,4,5];if(['Weekly','Fortnightly'].includes(repeat)&&!days.length){due=due||todayISO();days=[dayIndex(due)]}return {repeat,days,due,paused:document.getElementById('fPaused')?.value==='true',start:document.getElementById('fStart')?.value||'',end:document.getElementById('fEnd')?.value||''};}
 function openAdd(){openSheet(`<h2>Add a task</h2>${taskForm({})}<div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="addTask()">Add task</button></div>`)}
 function addTask(){const title=document.getElementById('fTitle').value.trim();if(!title)return;const s=collectSchedule();state.tasks.push({id:Date.now(),title,cat:document.getElementById('fCat').value,pts:+document.getElementById('fPts').value||0,done:false,lastDone:'',repeat:s.repeat,due:s.due,days:s.days,paused:s.paused,start:s.start,end:s.end});closeModal();save()}
-function editTask(id){const t=state.tasks.find(x=>String(x.id)===String(id));if(!t)return;const key=String(t.id);openSheet(`<h2>Edit task ✏️</h2>${taskForm(t,true)}<div class="actions"><button class="secondary danger" onclick="deleteTask('${key}')">Delete</button><button class="primary" onclick="updateTask('${key}')">Save changes</button></div>`)}
-function updateTask(id){let t=state.tasks.find(x=>String(x.id)===String(id));if(!t)return;const s=collectSchedule();t.title=document.getElementById('fTitle').value.trim()||t.title;t.cat=document.getElementById('fCat').value;t.pts=+document.getElementById('fPts').value||0;t.repeat=s.repeat;t.due=s.due;t.days=s.days;t.paused=s.paused;t.start=s.start;t.end=s.end;t.lastDone='';t.done=false;closeModal();save()}
-function toggleTaskPause(id){const t=state.tasks.find(x=>String(x.id)===String(id));if(t){t.paused=!t.paused;save()}}
+function findMainTask(id){return state.tasks.find(x=>String(x.id)===String(id))}
+function editTask(id){const t=findMainTask(id);if(!t)return;openSheet(`<h2>Edit task ✏️</h2>${taskForm(t,true)}<div class="actions"><button class="secondary danger" onclick="deleteTask(${JSON.stringify(String(id))})">Delete</button><button class="primary" onclick="updateTask(${JSON.stringify(String(id))})">Save changes</button></div>`)}
+function updateTask(id){const t=findMainTask(id);if(!t)return;const s=collectSchedule();t.title=document.getElementById('fTitle').value.trim()||t.title;t.cat=document.getElementById('fCat').value;t.pts=+document.getElementById('fPts').value||0;t.repeat=s.repeat;t.due=s.due;t.days=s.days;t.paused=s.paused;t.start=s.start;t.end=s.end;t.lastDone='';t.done=false;closeModal();save()}
+function toggleTaskPause(id){const t=findMainTask(id);if(t){t.paused=!t.paused;save()}}
 function deleteTask(id){if(confirm('Delete this task?')){state.tasks=state.tasks.filter(x=>String(x.id)!==String(id));closeModal();save()}}
-function toggleTask(id){let t=state.tasks.find(x=>String(x.id)===String(id));if(!t)return;const done=taskDoneToday(t);if(!done){if(t.repeat&&t.repeat!=='Once')t.lastDone=todayISO();else t.done=true;state.points+=t.pts}else{if(t.repeat&&t.repeat!=='Once')t.lastDone='';else t.done=false;state.points=Math.max(0,state.points-t.pts)}save()}
+function toggleTask(id){const t=findMainTask(id);if(!t)return;const done=taskDoneToday(t);if(!done){if(t.repeat&&t.repeat!=='Once')t.lastDone=todayISO();else t.done=true;state.points+=Number(t.pts)||0}else{if(t.repeat&&t.repeat!=='Once')t.lastDone='';else t.done=false;state.points=Math.max(0,state.points-(Number(t.pts)||0))}save()}
 
 function routineForm(t={}){const days=t.days||((t.repeat==='Weekdays')?[1,2,3,4,5]:[]);return `<div class="field"><label>Cleaning task</label><input id="rTitle" value="${esc(t.title||'')}" placeholder="e.g. Change sheets"></div><div class="field"><label>Points</label><input id="rPts" type="number" value="${t.pts??0}" min="0"></div><div class="field"><label>Status</label><select id="rPaused"><option value="false" ${!t.paused?'selected':''}>Active</option><option value="true" ${t.paused?'selected':''}>Paused</option></select></div><div class="field"><label>Repeat</label><select id="fRepeat" onchange="toggleDayPicker()">${['Once','Daily','Weekdays','Weekly','Fortnightly','Monthly'].map(c=>`<option ${c===(t.repeat||'Once')?'selected':''}>${c}</option>`).join('')}</select></div><div class="field" id="dayPicker" style="display:${['Weekly','Fortnightly'].includes(t.repeat)?'block':'none'}"><label>Which day(s)?</label>${weekdayChecks(days)}</div><div class="field"><label>${t.repeat&&t.repeat!=='Once'?'Start / first occurrence':'Due date (optional)'}</label><input id="fDue" type="date" value="${t.due||''}"></div><div class="field"><label>Active from (optional)</label><input id="rStart" type="date" value="${t.start||''}"></div><div class="field"><label>Active until (optional)</label><input id="rEnd" type="date" value="${t.end||''}"></div><div class="mini">Pause seasonal cleaning or garden routines without deleting them. Start/end dates are useful for school terms or seasons.</div>`}
 function openRoutine(){openSheet(`<h2>Add cleaning task 🌿</h2>${routineForm({repeat:'Weekly',days:[6]})}<div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="addRoutine()">Add task</button></div>`)}

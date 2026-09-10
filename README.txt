@@ -1,27 +1,16 @@
-Bloomin Lovely Home v3
+Bloomin Lovely Home v8
 
-This is a personal, installable web app (PWA) for tasks, home, work, kids, activities, shopping and rewards.
+New in v8:
+- Pause option for every task type: Work, Home, Garden, Kids and cleaning routines.
+- Paused tasks stay saved and can be resumed without rebuilding them.
+- Optional Active from / Active until dates for seasonal tasks and school terms.
+- Paused/seasonal tasks are hidden from today's active task list and collected in a Paused / seasonal tasks section.
+- Existing recurring schedules and activity pause/season controls remain.
 
-V3 improvements:
-- Edit button on tasks
-- Rename/delete tasks
-- Edit/delete kids and rename kids' tasks
-- Edit/delete rewards
-- Recurring tasks: Once, Daily, Weekdays, Weekly, Fortnightly, Monthly
-- Weekly tasks can be assigned to multiple days (e.g. Mon + Wed + Fri)
-- Recurring tasks automatically become available again on their scheduled days
-- Keeps existing local data in localStorage when replacing the app files
-- Reward history is recorded when a reward is claimed
+Files:
+- index.html (main app)
+- sw.js (offline cache, bumped to v8)
+- manifest.webmanifest
+- icons/
 
-Important:
-- Data is stored locally in the browser/device. There is no account or server database.
-- Export a backup regularly from More > Backup.
-- This is a web app/PWA, not a native App Store app.
-
-Updating your GitHub Pages version:
-1. Replace the existing index.html in your repository with the new v3 index.html.
-2. Leave sw.js, manifest.webmanifest and the icons as they are (unless you are also given updated copies).
-3. Commit the change to main.
-4. GitHub Pages should publish the change automatically from the selected branch/source. It may take a few minutes.
-
-If the old app is cached on the iPhone, close/reopen the web app or refresh the site after the GitHub update.
+Your data is stored locally in the browser/device. Keep using Backup > Export my data before major changes.
