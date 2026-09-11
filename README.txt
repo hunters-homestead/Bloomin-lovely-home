@@ -1,16 +1,5 @@
-Bloomin Lovely Home v8
+Bloomin Lovely Home v14
 
-New in v8:
-- Pause option for every task type: Work, Home, Garden, Kids and cleaning routines.
-- Paused tasks stay saved and can be resumed without rebuilding them.
-- Optional Active from / Active until dates for seasonal tasks and school terms.
-- Paused/seasonal tasks are hidden from today's active task list and collected in a Paused / seasonal tasks section.
-- Existing recurring schedules and activity pause/season controls remain.
-
-Files:
-- index.html (main app)
-- sw.js (offline cache, bumped to v8)
-- manifest.webmanifest
-- icons/
-
-Your data is stored locally in the browser/device. Keep using Backup > Export my data before major changes.
+Built from the user's 2026-09-08 backup data.
+This version starts with the backup data included so the first load does not depend on importing a JSON file.
+Work, Home, Garden and Kids task navigation and editing have been repaired.
